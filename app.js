@@ -55,6 +55,8 @@ ${s.boundaryNotes}
 ABSOLUTE PLAYER-AGENCY RULE
 The user has exclusive control of ${s.playerName}. NEVER write, invent, imply, or decide ${s.playerName}'s dialogue, actions, gestures, facial expressions, thoughts, emotions, perceptions, intentions, choices, or physical reactions. Do not move ${s.playerName} through the scene. Do not finish ${s.playerName}'s sentences. Do not describe what ${s.playerName} "realizes," "feels," "notices," "wants," or "does." You may only refer to facts about ${s.playerName} that the user already established in their latest or prior messages.
 
+Do not paraphrase, embellish, reinterpret, summarize, or narrate back the player's submitted dialogue or actions. Treat the user's latest message as completed canon and begin AFTER it. Outside NPC dialogue, avoid second-person narration entirely: do not write "you," "your," "you're," or sensory phrases such as "you see," "you hear," "you feel," "you notice," or "you catch." Describe only NPC behavior and objective environmental events. Never assign tone, volume, body language, sensation, attraction, familiarity, knowledge, or emotion to ${s.playerName}.
+
 You control every NPC and the environment. Write NPC dialogue, actions, thoughts, and observations freely. You may narrate environmental events that happen around the player. Advance the plot through NPC choices, discoveries, interruptions, external events, and consequences — never by taking control of the player character.
 
 Every response MUST end at a natural handoff point where ${s.playerName} can decide what to say/do next. If the scene cannot continue without deciding ${s.playerName}'s action, STOP instead of deciding it.
@@ -65,6 +67,7 @@ Do not add meta commentary, choices, or OOC notes unless the user asks.`;
 function render() {
   $("storyTitle").textContent = state.scenario.title;
   $("playerChip").textContent = `You: ${state.scenario.playerName}`;
+  $("hijackBtn").textContent = `Hands off ${state.scenario.playerName}`;
   const chat = $("chat");
   chat.innerHTML = "";
 
@@ -74,6 +77,7 @@ function render() {
     state.messages.forEach(m => appendVisual(m.role, m.role === "user" ? state.scenario.playerName : "AI", m.content));
   }
   $("retryBtn").disabled = !state.messages.some(m => m.role === "assistant");
+  $("hijackBtn").disabled = !state.messages.some(m => m.role === "assistant");
   chat.scrollTop = chat.scrollHeight;
 }
 
@@ -140,23 +144,38 @@ async function send() {
   }
 }
 
-async function retry() {
+async function retry(agencyCorrection = false) {
   const idx = [...state.messages].map(m => m.role).lastIndexOf("assistant");
   if (idx < 0) return;
+  const rejectedReply = state.messages[idx].content;
   state.messages.splice(idx, 1);
   save();
   render();
 
   $("retryBtn").disabled = true;
+  $("hijackBtn").disabled = true;
+  const correction = agencyCorrection ? {
+    role: "system",
+    content: `The rejected reply below violated player agency by narrating, paraphrasing, or assigning perceptions/reactions to ${state.scenario.playerName}. Rewrite the scene from scratch. Preserve the user's message as completed canon, begin after it, and write only NPC actions/dialogue plus objective environmental events. Do not use second-person narration outside quoted NPC dialogue. Do not repeat any player-controlled material.\n\nREJECTED REPLY:\n${rejectedReply}`
+  } : null;
   try {
-    const reply = await callAI();
+    let reply;
+    if (correction) {
+      state.messages.push(correction);
+      reply = await callAI();
+      state.messages.pop();
+    } else {
+      reply = await callAI();
+    }
     state.messages.push({ role: "assistant", content: reply });
     save();
     render();
   } catch (err) {
+    if (correction && state.messages.at(-1) === correction) state.messages.pop();
     appendVisual("system", "Error", err.message);
   } finally {
     $("retryBtn").disabled = false;
+    $("hijackBtn").disabled = false;
   }
 }
 
@@ -178,7 +197,8 @@ function loadScenarioForm() {
 $("settingsBtn").onclick = () => { loadSettingsForm(); $("settingsDialog").showModal(); };
 $("editScenarioBtn").onclick = () => { loadScenarioForm(); $("scenarioDialog").showModal(); };
 $("sendBtn").onclick = send;
-$("retryBtn").onclick = retry;
+$("retryBtn").onclick = () => retry(false);
+$("hijackBtn").onclick = () => retry(true);
 $("input").addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send();
 });
