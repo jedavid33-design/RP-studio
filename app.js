@@ -61,7 +61,24 @@ You control every NPC and the environment. Write NPC dialogue, actions, thoughts
 
 Every response MUST end at a natural handoff point where ${s.playerName} can decide what to say/do next. If the scene cannot continue without deciding ${s.playerName}'s action, STOP instead of deciding it.
 
+OUTPUT FORMAT — REQUIRED
+Think and check the agency rules silently. Return only finished story prose enclosed in exactly one <story>...</story> block. Put no analysis, planning, self-check, preface, or commentary before or after the block. The text inside <story> must be ready to show the player directly.
+
 Do not add meta commentary, choices, or OOC notes unless the user asks.`;
+}
+
+function cleanStoryReply(raw) {
+  const text = String(raw || "").trim();
+  const tagged = [...text.matchAll(/<story>([\s\S]*?)<\/story>/gi)];
+  if (tagged.length) return tagged[tagged.length - 1][1].trim();
+
+  // Conservative fallback for models that ignore the required tags but print
+  // their planning around a clearly marked final draft.
+  const draftMarker = text.toLowerCase().lastIndexOf("let's write:");
+  let cleaned = draftMarker >= 0 ? text.slice(draftMarker + "let's write:".length).trim() : text;
+  const trailingMeta = cleaned.search(/\n\s*\n(?:we must (?:ensure|check|avoid)|self-check:|analysis:)/i);
+  if (trailingMeta >= 0) cleaned = cleaned.slice(0, trailingMeta).trim();
+  return cleaned;
 }
 
 function render() {
@@ -117,7 +134,7 @@ async function callAI() {
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Worker returned ${res.status}`);
-  return data.content;
+  return cleanStoryReply(data.content);
 }
 
 async function send() {
@@ -156,7 +173,7 @@ async function retry(agencyCorrection = false) {
   $("hijackBtn").disabled = true;
   const correction = agencyCorrection ? {
     role: "system",
-    content: `The rejected reply below violated player agency by narrating, paraphrasing, or assigning perceptions/reactions to ${state.scenario.playerName}. Rewrite the scene from scratch. Preserve the user's message as completed canon, begin after it, and write only NPC actions/dialogue plus objective environmental events. Do not use second-person narration outside quoted NPC dialogue. Do not repeat any player-controlled material.\n\nREJECTED REPLY:\n${rejectedReply}`
+    content: `The rejected reply below violated player agency by narrating, paraphrasing, or assigning perceptions/reactions to ${state.scenario.playerName}. Rewrite the scene from scratch. Preserve the user's message as completed canon, begin after it, and write only NPC actions/dialogue plus objective environmental events. Do not use second-person narration outside quoted NPC dialogue. Do not repeat any player-controlled material. Think silently, then return ONLY the corrected story inside one <story>...</story> block with nothing before or after it.\n\nREJECTED REPLY:\n${rejectedReply}`
   } : null;
   try {
     let reply;

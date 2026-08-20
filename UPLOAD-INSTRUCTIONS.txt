@@ -1,4 +1,4 @@
-RP Studio v1.0.2
+RP Studio v1.0.3
 
 Upload index.html, style.css, and app.js to the root of your RP-studio GitHub repository.
 Choose Replace when GitHub warns that files with those names already exist.
@@ -6,5 +6,8 @@ Choose Replace when GitHub warns that files with those names already exist.
 This update does not erase your saved story, settings, Worker URL, app password,
 or conversation. The new Hands off Olivia button rejects the latest AI reply and
 regenerates it with an explicit player-agency correction.
+
+Version 1.0.3 also removes exposed AI planning/reasoning and displays only the
+finished story prose.
 
 After GitHub Pages finishes deploying, fully close and reopen RP Studio.
