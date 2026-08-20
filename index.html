@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#111318" />
+  <title>Story RP Studio</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Interactive story role-play</div>
+        <h1 id="storyTitle">Story RP Studio</h1>
+      </div>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button>
+    </header>
+
+    <main id="chat" class="chat" aria-live="polite"></main>
+
+    <section class="composer">
+      <div class="who-row">
+        <span class="chip" id="playerChip">You</span>
+        <button class="text-btn" id="editScenarioBtn">Edit story</button>
+        <button class="text-btn" id="clearBtn">New session</button>
+      </div>
+      <textarea id="input" rows="4" placeholder="Write what your character says, does, or thinks…"></textarea>
+      <div class="composer-actions">
+        <button id="retryBtn" class="secondary" disabled>↻ Retry AI</button>
+        <button id="sendBtn" class="primary">Send ➜</button>
+      </div>
+    </section>
+  </div>
+
+  <dialog id="settingsDialog">
+    <form method="dialog" class="panel">
+      <div class="panel-head">
+        <h2>Connection</h2>
+        <button class="icon-btn" value="cancel" aria-label="Close">✕</button>
+      </div>
+      <label>Worker URL
+        <input id="workerUrl" placeholder="https://your-worker.workers.dev" />
+      </label>
+      <label>App password
+        <input id="appPassword" type="password" placeholder="The password you set on the Worker" />
+      </label>
+      <label>OpenRouter model
+        <input id="model" value="openrouter/free" />
+      </label>
+      <div class="hint">Start with <code>openrouter/free</code> just to prove the app works. Later, paste any OpenRouter model ID you want to test.</div>
+      <label>Temperature
+        <input id="temperature" type="number" min="0" max="2" step="0.1" value="0.9" />
+      </label>
+      <label>Max reply tokens
+        <input id="maxTokens" type="number" min="100" max="4000" step="100" value="900" />
+      </label>
+      <button id="saveSettingsBtn" class="primary" value="default">Save</button>
+    </form>
+  </dialog>
+
+  <dialog id="scenarioDialog">
+    <form method="dialog" class="panel">
+      <div class="panel-head">
+        <h2>Story setup</h2>
+        <button class="icon-btn" value="cancel" aria-label="Close">✕</button>
+      </div>
+      <label>Story title
+        <input id="scenarioTitle" value="Trapped Hearts-ish Test" />
+      </label>
+      <label>Your character
+        <input id="playerName" value="Olivia" />
+      </label>
+      <label>Your character notes
+        <textarea id="playerNotes" rows="4">A sharp, ambitious attorney. The USER controls Olivia completely.</textarea>
+      </label>
+      <label>AI character(s)
+        <textarea id="npcNotes" rows="6">Caleb Quinn — Olivia's brilliant, infuriating colleague. Confident, observant, dryly funny, and much more emotionally perceptive than Olivia gives him credit for.</textarea>
+      </label>
+      <label>Premise / contained story
+        <textarea id="premise" rows="7">Olivia and Caleb are rival attorneys at the same firm. After months of professional friction and unresolved attraction, they become trapped together in an elevator during a blackout. The story should unfold as a contained forced-proximity romance with gradual reveals, tension, banter, and a clear forward-moving plot.</textarea>
+      </label>
+      <label>Writing style
+        <textarea id="styleNotes" rows="5">Write immersive contemporary-romance prose with strong dialogue, chemistry, sensory detail, and natural pacing. Advance the situation without rushing major emotional or romantic beats.</textarea>
+      </label>
+      <label>Extra boundaries / rules
+        <textarea id="boundaryNotes" rows="5">All characters are adults. Respect consent. Do not decide the player's choices for them.</textarea>
+      </label>
+      <button id="saveScenarioBtn" class="primary" value="default">Save story</button>
+    </form>
+  </dialog>
+
+  <template id="messageTemplate">
+    <article class="msg">
+      <div class="msg-meta"></div>
+      <div class="msg-body"></div>
+    </article>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
