@@ -124,9 +124,21 @@ function cleanStoryReply(raw) {
   // their planning around a clearly marked final draft.
   const draftMarker = text.toLowerCase().lastIndexOf("let's write:");
   let cleaned = draftMarker >= 0 ? text.slice(draftMarker + "let's write:".length).trim() : text;
+  // Some models emit the opening tag but forget the closing tag. Strip any
+  // orphaned output markers so they can never appear in the story card.
+  cleaned = cleaned.replace(/<\/?story\b[^>]*>/gi, "").trim();
   const trailingMeta = cleaned.search(/\n\s*\n(?:we must (?:ensure|check|avoid)|self-check:|analysis:)/i);
   if (trailingMeta >= 0) cleaned = cleaned.slice(0, trailingMeta).trim();
   return cleaned;
+}
+
+function hasAgencyViolation(reply) {
+  // NPCs may say "you" in dialogue. Remove quoted dialogue before checking
+  // narration for the second-person language the agency contract forbids.
+  const narrationOnly = String(reply || "")
+    .replace(/“[^”]*”/gs, " ")
+    .replace(/"[^"\n]*"/g, " ");
+  return /\b(?:you|your|yours|yourself|you're|you've|you'll|you'd)\b/i.test(narrationOnly);
 }
 
 function cleanMemoryReply(raw) {
@@ -252,7 +264,18 @@ function appendVisual(role, label, content) {
   const node = $("messageTemplate").content.firstElementChild.cloneNode(true);
   node.classList.add(role === "assistant" ? "assistant" : role);
   node.querySelector(".msg-meta").textContent = label;
-  node.querySelector(".msg-body").textContent = content;
+  const body = node.querySelector(".msg-body");
+  const displayContent = role === "assistant" ? cleanStoryReply(content) : String(content || "");
+  const paragraphs = displayContent.trim().split(/\n+/).filter(Boolean);
+  if (!paragraphs.length) {
+    body.textContent = displayContent;
+  } else {
+    paragraphs.forEach(text => {
+      const paragraph = document.createElement("p");
+      paragraph.textContent = text.trim();
+      body.appendChild(paragraph);
+    });
+  }
   $("chat").appendChild(node);
 }
 
@@ -306,7 +329,15 @@ async function callAI() {
     role: "system",
     content: `FINAL TURN RULE — apply this to the response you are about to write: narrate only NPC choices/actions/dialogue and objective environment. Do not supply even one new action, sensation, expression, thought, emotion, or reaction for ${state.scenario.playerName}; do not paraphrase the user's move. End before ${state.scenario.playerName}'s next decision or response. Silently remove any sentence that violates this, then output only <story> prose.`
   });
-  return cleanStoryReply(await requestAI(messages));
+  let reply = cleanStoryReply(await requestAI(messages));
+  if (hasAgencyViolation(reply)) {
+    messages.push({
+      role: "system",
+      content: `AUTOMATIC AGENCY SHIELD: The previous draft failed validation because its narration used second-person language and took control of ${state.scenario.playerName}. Rewrite the turn now. NPC dialogue may address ${state.scenario.playerName}, but narration must contain no you/your language and must assign no action, thought, feeling, reaction, movement, perception, or decision to ${state.scenario.playerName}. Return only one complete <story>...</story> block.`
+    });
+    reply = cleanStoryReply(await requestAI(messages, { temperature: Math.min(Number(state.settings.temperature), 0.55) }));
+  }
+  return reply;
 }
 
 async function refreshMemory() {

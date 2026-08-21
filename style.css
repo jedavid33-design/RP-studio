@@ -43,7 +43,9 @@ h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(22px, 5vw,
 .msg.system { border-style: dashed; color: var(--muted); background: rgba(244, 237, 249, .72); }
 .msg-meta { font-size: 11px; font-weight: 750; color: var(--accent3); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .08em; }
 .msg.user .msg-meta { color: var(--accent); }
-.msg-body { white-space: pre-wrap; line-height: 1.62; font-size: 16px; }
+.msg-body { line-height: 1.62; font-size: 16px; }
+.msg-body p { margin: 0 0 1em; white-space: pre-wrap; }
+.msg-body p:last-child { margin-bottom: 0; }
 .composer { z-index: 5; padding: 10px 11px max(11px, env(safe-area-inset-bottom)); background: rgba(250, 246, 252, .86); border-top: 1px solid var(--line); backdrop-filter: blur(24px) saturate(145%); -webkit-backdrop-filter: blur(24px) saturate(145%); }
 .composer-inner { max-width: 780px; margin: 0 auto; padding: 10px; border: 1px solid var(--line); border-radius: 23px; background: rgba(255, 253, 255, .78); box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.7); }
 .who-row, .composer-actions { display: flex; align-items: center; gap: 8px; }
