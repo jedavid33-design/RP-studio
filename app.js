@@ -138,7 +138,14 @@ function hasAgencyViolation(reply) {
   const narrationOnly = String(reply || "")
     .replace(/“[^”]*”/gs, " ")
     .replace(/"[^"\n]*"/g, " ");
-  return /\b(?:you|your|yours|yourself|you're|you've|you'll|you'd)\b/i.test(narrationOnly);
+  const nameParts = String(state.scenario.playerName || "")
+    .split(/\s+/)
+    .map(part => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .filter(part => part.length > 1);
+  const playerNamedInNarration = nameParts.length
+    ? new RegExp(`\\b(?:${nameParts.join("|")})\\b`, "i").test(narrationOnly)
+    : false;
+  return playerNamedInNarration || /\b(?:you|your|yours|yourself|you're|you've|you'll|you'd)\b/i.test(narrationOnly);
 }
 
 function cleanMemoryReply(raw) {
@@ -327,13 +334,13 @@ async function callAI() {
   });
   messages.push({
     role: "system",
-    content: `FINAL TURN RULE — apply this to the response you are about to write: narrate only NPC choices/actions/dialogue and objective environment. Do not supply even one new action, sensation, expression, thought, emotion, or reaction for ${state.scenario.playerName}; do not paraphrase the user's move. End before ${state.scenario.playerName}'s next decision or response. Silently remove any sentence that violates this, then output only <story> prose.`
+    content: `FINAL TURN RULE — apply this to the response you are about to write: narrate only NPC choices/actions/dialogue and objective environment. Do not supply even one new action, sensation, expression, thought, emotion, or reaction for ${state.scenario.playerName}; do not paraphrase the user's move. Outside quoted NPC dialogue, do not write ${state.scenario.playerName}'s name or use any pronoun that refers to the player character. End before ${state.scenario.playerName}'s next decision or response. Silently remove any sentence that violates this, then output only <story> prose.`
   });
   let reply = cleanStoryReply(await requestAI(messages));
   if (hasAgencyViolation(reply)) {
     messages.push({
       role: "system",
-      content: `AUTOMATIC AGENCY SHIELD: The previous draft failed validation because its narration used second-person language and took control of ${state.scenario.playerName}. Rewrite the turn now. NPC dialogue may address ${state.scenario.playerName}, but narration must contain no you/your language and must assign no action, thought, feeling, reaction, movement, perception, or decision to ${state.scenario.playerName}. Return only one complete <story>...</story> block.`
+      content: `AUTOMATIC AGENCY SHIELD: The previous draft failed validation because its narration referred to or took control of ${state.scenario.playerName}. Rewrite the turn now from scratch. NPC dialogue may address ${state.scenario.playerName}, but outside quoted NPC dialogue the narration must not contain the player's first name, surname, you/your language, or any pronoun referring to the player. Describe only named NPC actions/dialogue and objective environmental events. Stop before the player character's next action or reaction. Return only one complete <story>...</story> block.`
     });
     reply = cleanStoryReply(await requestAI(messages, { temperature: Math.min(Number(state.settings.temperature), 0.55) }));
   }

@@ -1,4 +1,4 @@
-RP Studio v1.0.5.1
+RP Studio v1.0.5.2
 
 Upload all seven files in this ZIP to the root of your RP-studio GitHub repository:
 index.html, style.css, app.js, manifest.webmanifest, apple-touch-icon.png,
@@ -25,5 +25,9 @@ Version 1.0.5.1 adds true paragraph spacing, strips incomplete story tags, and
 automatically requests one corrected rewrite when the local agency shield detects
 second-person narration outside NPC dialogue. The extra request happens only when
 the first reply fails the agency check.
+
+Version 1.0.5.2 expands the agency shield to catch third-person player takeover.
+The player's first name or surname outside quoted NPC dialogue now triggers the same
+automatic correction, and the prompt forbids player-referencing pronouns in narration.
 
 After GitHub Pages finishes deploying, fully close and reopen RP Studio.
