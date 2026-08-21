@@ -91,7 +91,18 @@ dialog::backdrop { background: rgba(54, 40, 64, .3); backdrop-filter: blur(8px);
 .library-card-actions, .library-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .library-card button { min-height: 34px; padding: 6px 9px; border-radius: 10px; }
 .library-actions { margin-top: 10px; }
+.sync-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.sync-actions button { width: 100%; }
+.check-row { display: flex !important; align-items: center; gap: 9px; margin: 12px 2px !important; }
+.check-row input { width: 19px !important; height: 19px; margin: 0 !important; accent-color: var(--accent); }
+.sync-status { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(239, 231, 246, .55); color: var(--muted); font-size: 12px; line-height: 1.45; }
+.sync-status.success { color: #246f67; border-color: rgba(49, 135, 142, .28); background: rgba(216, 239, 240, .55); }
+.sync-status.working { color: var(--accent); }
+.sync-status.error { color: #8e355c; border-color: rgba(169, 85, 120, .28); background: rgba(245, 216, 229, .5); }
+.sync-disconnect { display: block; margin: 7px auto 0; }
+.credit-link { display: inline-flex; align-items: center; min-height: 42px; margin-top: 12px; padding: 9px 13px; border: 1px solid rgba(109, 75, 134, .2); border-radius: 12px; background: linear-gradient(135deg, rgba(227, 204, 255, .9), rgba(169, 207, 212, .8)); color: #342442; font-size: 13px; font-weight: 750; text-decoration: none; box-shadow: 0 7px 20px rgba(109, 75, 134, .13); }
+.credit-link:active { transform: scale(.98); }
 code { color: var(--accent); }
 @media (min-width: 800px) { .chat { padding-top: 30px; } .msg-body { font-size: 17px; } .composer { padding-left: 18px; padding-right: 18px; } }
-@media (max-width: 430px) { .eyebrow { max-width: 285px; } .text-btn { padding-inline: 6px; font-size: 12px; } .composer-inner { padding: 8px; } .primary, .secondary, .warning { padding-inline: 11px; font-size: 13px; } }
+@media (max-width: 430px) { .eyebrow { max-width: 285px; } .text-btn { padding-inline: 6px; font-size: 12px; } .composer-inner { padding: 8px; } .primary, .secondary, .warning { padding-inline: 11px; font-size: 13px; } .sync-actions { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: no-preference) { .msg { animation: rise .24s ease-out; } @keyframes rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } } }

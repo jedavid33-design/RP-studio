@@ -1,44 +1,33 @@
-RP Studio v1.0.6.1
+RP Studio v1.1.1 — WEBSITE FILES
 
-Upload all seven files in this ZIP to the root of your RP-studio GitHub repository:
+STOP: Upload these files only to the RP Studio GitHub repository.
+Do not upload them to book-ocr-studio. Do not upload the ZIP itself.
+
+Upload all eight files inside this folder to the root of the RP Studio repo:
 index.html, style.css, app.js, manifest.webmanifest, apple-touch-icon.png,
-icon-192.png, and icon-512.png.
-Choose Replace when GitHub warns that files with those names already exist.
+icon-192.png, icon-512.png, and icon-1024.png.
 
-This update does not erase your saved story, settings, Worker URL, app password,
-or conversation. The new Hands off Olivia button rejects the latest AI reply and
-regenerates it with an explicit player-agency correction.
+Choose Replace when GitHub warns that files already exist. After the GitHub
+Pages workflow turns green, fully close and reopen the Home Screen app.
 
-Version 1.0.3 also removes exposed AI planning/reasoning and displays only the
-finished story prose.
+Version 1.1.1 adds:
+- A new edge-to-edge opal-glass icon with a translucent milky book-and-quill
+  symbol. The folder includes a 1024px master plus the PWA and Apple-touch sizes.
+- An Add OpenRouter credits button when OpenRouter returns an insufficient-credit,
+  payment-required, or paid-account-upgrade error. Other provider errors remain
+  plain error messages.
 
-Version 1.0.4 added manual continuity memory. Refresh memory compresses older
-turns for the model while keeping the complete transcript visible and saved.
-It also strengthens the automatic player-agency guard, adds the neon quill-and-book
-Home Screen icon, and changes the interface to a lighter opal theme.
+Version 1.1.0 included:
+- A quote-aware Agency Shield correction. NPC dialogue may accuse, question, or
+  speculate about the player without triggering a false positive. Identity
+  clauses such as "He knows who Jace is" are no longer mistaken for narration
+  of Jace's state. Player-attributed dialogue and genuine player takeover remain
+  blocked.
+- Optional encrypted cloud sync for stories, full transcripts, continuity
+  memory, profiles, and model preferences.
+- Automatic background uploads after changes, manual Sync now, conflict
+  protection, and continued offline/local saving.
 
-Version 1.0.5 adds a story library, reusable character profiles, portable JSON
-backup/import, and a memory meter that recommends when to refresh without spending
-credits automatically. Existing v1.0.4 browser data migrates into the first story.
-
-Version 1.0.5.1 adds true paragraph spacing, strips incomplete story tags, and
-automatically requests one corrected rewrite when the local agency shield detects
-second-person narration outside NPC dialogue. The extra request happens only when
-the first reply fails the agency check.
-
-Version 1.0.5.2 expands the agency shield to catch third-person player takeover.
-The player's first name or surname outside quoted NPC dialogue now triggers the same
-automatic correction, and the prompt forbids player-referencing pronouns in narration.
-
-Version 1.0.6 replaces the accumulated prohibition-heavy prompt with a concise role
-contract and NPC-camera structure. Agency violations are blocked visibly instead of
-triggering a hidden paid retry: Repair costs one clearly labeled request, Use it anyway
-accepts the draft, and Discard removes it. Retry now works after provider/network errors.
-Memory notices now begin at 16 messages and recommend refreshing at 24.
-
-Version 1.0.6.1 makes the agency detector grammar-aware. Harmless references to the
-player's established position or presence are allowed, while player-subject actions,
-thoughts, perceptions, body reactions, speech, decisions, and completed physical
-control by NPCs remain blocked.
-
-After GitHub Pages finishes deploying, fully close and reopen RP Studio.
+Cloud sync also requires the separate RP-Studio-Worker-v1.1.0 update and an RP_DB
+D1 binding. Install the Worker update first. Existing local stories, connection
+settings, and manual backup/import remain intact when installing this website ZIP.

@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.0.6.1" />
+  <link rel="stylesheet" href="style.css?v=1.1.1" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -19,7 +19,7 @@
   <div class="app">
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.0.6.1 · SAVED ON THIS DEVICE</div>
+        <div class="eyebrow">RP STUDIO · v1.1.1 · PRIVATE CLOUD SYNC</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
@@ -60,6 +60,18 @@
       <label>Temperature<input id="temperature" type="number" min="0" max="2" step="0.1" value="0.9" /></label>
       <label>Max reply tokens<input id="maxTokens" type="number" min="100" max="4000" step="100" value="900" /></label>
       <button id="saveSettingsBtn" class="primary full-width" value="default">Save connection</button>
+      <h3>Private cloud sync</h3>
+      <div class="hint">Syncs stories, transcripts, memories, profiles, and model preferences between your devices. Everything is encrypted in this browser before it reaches your Worker. Enter the same Worker URL, app password, and sync code on each device.</div>
+      <label>Sync code<input id="syncCode" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Create one here or paste it from your other device" /></label>
+      <div class="sync-actions">
+        <button type="button" id="createSyncBtn" class="primary">Create code &amp; upload</button>
+        <button type="button" id="connectSyncBtn" class="secondary">Connect &amp; download</button>
+        <button type="button" id="copySyncBtn" class="secondary">Copy code</button>
+        <button type="button" id="syncNowBtn" class="secondary">Sync now</button>
+      </div>
+      <label class="check-row"><input id="autoSync" type="checkbox" checked /><span>Automatically sync after changes</span></label>
+      <div id="syncStatus" class="sync-status">Cloud sync is not connected.</div>
+      <button type="button" id="disconnectSyncBtn" class="text-btn sync-disconnect">Disconnect this device</button>
     </form>
   </dialog>
 
@@ -115,6 +127,6 @@
   </dialog>
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
-  <script src="app.js?v=1.0.6.1"></script>
+  <script src="app.js?v=1.1.1"></script>
 </body>
 </html>

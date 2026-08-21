@@ -1,8 +1,8 @@
 {
   "name": "Story RP Studio",
   "short_name": "RP Studio",
-  "description": "A private, device-saved interactive fiction studio.",
-  "start_url": "./?v=1.0.6.1",
+  "description": "A private, encrypted and synchronized interactive fiction studio.",
+  "start_url": "./?v=1.1.1",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f8f4fb",
@@ -19,6 +19,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

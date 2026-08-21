@@ -57,16 +57,35 @@ let state = {
   ...storyLibrary.stories[storyLibrary.activeId]
 };
 let pendingViolation = null;
+const SYNC_STORAGE_KEY = "rp.cloudSync.v1";
+let cloudSync;
+try { cloudSync = JSON.parse(localStorage.getItem(SYNC_STORAGE_KEY) || "null"); } catch { cloudSync = null; }
+cloudSync = {
+  enabled: false,
+  code: "",
+  revision: 0,
+  lastSyncedAt: "",
+  autoSync: true,
+  ...(cloudSync || {})
+};
+const syncRuntime = { ready: false, busy: false, timer: null };
+storyLibrary.updatedAt = storyLibrary.updatedAt || Object.values(storyLibrary.stories)
+  .map(story => story.updatedAt || "")
+  .sort()
+  .at(-1) || new Date().toISOString();
 
-function save() {
+function save(options = {}) {
   localStorage.setItem("rp.settings", JSON.stringify(state.settings));
+  const now = new Date().toISOString();
   storyLibrary.stories[storyLibrary.activeId] = {
     scenario: state.scenario,
     messages: state.messages,
     memory: state.memory,
-    updatedAt: new Date().toISOString()
+    updatedAt: now
   };
+  storyLibrary.updatedAt = now;
   localStorage.setItem("rp.stories", JSON.stringify(storyLibrary));
+  if (!options.skipSync) scheduleCloudPush();
 }
 
 function activateStory(id) {
@@ -125,11 +144,35 @@ function cleanStoryReply(raw) {
   return cleaned;
 }
 
+function narrationWithoutDialogue(reply) {
+  // Preserve line breaks and character positions while removing quoted speech.
+  // This tolerates straight, curly, multiline, and partially unmatched quotes.
+  const input = String(reply || "");
+  let output = "";
+  let closingQuote = "";
+  for (const char of input) {
+    if (closingQuote) {
+      if (char === closingQuote) closingQuote = "";
+      output += char === "\n" ? "\n" : " ";
+      continue;
+    }
+    if (char === "“" || char === "„") {
+      closingQuote = "”";
+      output += " ";
+    } else if (char === "\"") {
+      closingQuote = "\"";
+      output += " ";
+    } else {
+      output += char;
+    }
+  }
+  return output;
+}
+
 function hasAgencyViolation(reply) {
-  // NPC dialogue may address the player freely. Inspect narration only.
-  const narrationOnly = String(reply || "")
-    .replace(/“[^”]*”/gs, " ")
-    .replace(/"[^"\n]*"/g, " ");
+  // NPC dialogue may address, challenge, or speculate about the player freely.
+  // Only narration and dialogue explicitly attributed to the player are tested.
+  const narrationOnly = narrationWithoutDialogue(reply);
   if (/\b(?:you|your|yours|yourself|you're|you've|you'll|you'd)\b/i.test(narrationOnly)) return true;
 
   const rawNameParts = String(state.scenario.playerName || "")
@@ -143,9 +186,16 @@ function hasAgencyViolation(reply) {
 
   // Player named as the subject of an action, perception, decision, speech,
   // movement, or state. Harmless object references such as "behind Jace" pass.
-  const playerVerbs = "(?:is|was|remains?|remained|becomes?|became|steps?|stepped|moves?|moved|walks?|walked|follows?|followed|nods?|nodded|shakes?|shook|looks?|looked|glances?|glanced|watches?|watched|sees?|saw|hears?|heard|notices?|noticed|feels?|felt|thinks?|thought|wonders?|wondered|realizes?|realized|knows?|knew|wants?|wanted|needs?|needed|decides?|decided|chooses?|chose|reaches?|reached|takes?|took|accepts?|accepted|allows?|allowed|lets?|let|leans?|leaned|turns?|turned|pauses?|paused|hesitates?|hesitated|freezes?|froze|smiles?|smiled|frowns?|frowned|laughs?|laughed|breathes?|breathed|sighs?|sighed|gasps?|gasped|replies?|replied|says?|said|asks?|asked|answers?|answered|murmurs?|murmured|whispers?|whispered|speaks?|spoke|opens?|opened|closes?|closed|enters?|entered|leaves?|left|sits?|sat|stands?|stood|waits?|waited|listens?|listened|approaches?|approached|retreats?|retreated|recoils?|recoiled|reacts?|reacted|responds?|responded|stiffens?|stiffened|relaxes?|relaxed|shivers?|shivered|trembles?|trembled|swallows?|swallowed|blushes?|blushed|focuses?|focused|studies?|studied|considers?|considered|finds?|found|drifts?|drifted)";
+  const playerVerbs = "(?:steps?|stepped|moves?|moved|walks?|walked|follows?|followed|nods?|nodded|shakes?|shook|looks?|looked|glances?|glanced|watches?|watched|sees?|saw|hears?|heard|notices?|noticed|feels?|felt|thinks?|thought|wonders?|wondered|realizes?|realized|knows?|knew|wants?|wanted|needs?|needed|decides?|decided|chooses?|chose|reaches?|reached|takes?|took|accepts?|accepted|allows?|allowed|lets?|let|leans?|leaned|turns?|turned|pauses?|paused|hesitates?|hesitated|freezes?|froze|smiles?|smiled|frowns?|frowned|laughs?|laughed|breathes?|breathed|sighs?|sighed|gasps?|gasped|replies?|replied|says?|said|asks?|asked|answers?|answered|murmurs?|murmured|whispers?|whispered|speaks?|spoke|opens?|opened|closes?|closed|enters?|entered|leaves?|left|sits?|sat|stands?|stood|waits?|waited|listens?|listened|approaches?|approached|retreats?|retreated|recoils?|recoiled|reacts?|reacted|responds?|responded|stiffens?|stiffened|relaxes?|relaxed|shivers?|shivered|trembles?|trembled|swallows?|swallowed|blushes?|blushed|focuses?|focused|studies?|studied|considers?|considered|finds?|found|drifts?|drifted)";
   const playerAsSubject = new RegExp(`\\b${playerRef}\\b(?:\\s*,[^.!?]{0,45},)?\\s+(?:\\w+ly\\s+)?${playerVerbs}\\b`, "i");
   if (playerAsSubject.test(narrationOnly)) return true;
+
+  // Copulas need a complement. This catches "Jace is frightened" or
+  // "Jace was walking" without falsely flagging identity clauses such as
+  // "He knows exactly who Jace is."
+  const controlledState = "(?:afraid|angry|anxious|aware|breathless|calm|confused|curious|dizzy|eager|embarrassed|frightened|frozen|frustrated|glad|happy|hesitant|hurt|nervous|overwhelmed|ready|relieved|sad|scared|shocked|silent|still|stunned|surprised|tense|terrified|tired|uncertain|uneasy|uncomfortable|unwilling|willing|worried|\\w+ing)";
+  const playerState = new RegExp(`\\b${playerRef}\\b(?:\\s*,[^.!?]{0,45},)?\\s+(?:is|was|becomes?|became|remains?|remained)\\s+(?:not\\s+)?${controlledState}\\b`, "i");
+  if (playerState.test(narrationOnly)) return true;
 
   // Internal state or involuntary body language assigned through a possessive.
   const controlledPossessive = "(?:eyes?|gaze|hands?|fingers?|breath|heart|pulse|stomach|body|mind|thoughts?|attention|expression|face|voice|grip|feet|knees?|shoulders?|posture|muscles?|skin|cheeks?|lips?|head)";
@@ -280,6 +330,10 @@ function deleteStory(id) {
   save(); render(); renderLibrary();
 }
 
+function isOpenRouterCreditError(message) {
+  return /(?:insufficient\s+(?:credits?|balance)|out\s+of\s+credits?|credit\s+balance|payment\s+required|requires?\s+more\s+credits?|upgrade\s+to\s+a\s+paid\s+account)/i.test(String(message || ""));
+}
+
 function appendVisual(role, label, content) {
   const node = $("messageTemplate").content.firstElementChild.cloneNode(true);
   node.classList.add(role === "assistant" ? "assistant" : role);
@@ -295,6 +349,15 @@ function appendVisual(role, label, content) {
       paragraph.textContent = text.trim();
       body.appendChild(paragraph);
     });
+  }
+  if (role === "system" && /error/i.test(label) && isOpenRouterCreditError(displayContent)) {
+    const creditLink = document.createElement("a");
+    creditLink.className = "credit-link";
+    creditLink.href = "https://openrouter.ai/settings/credits";
+    creditLink.target = "_blank";
+    creditLink.rel = "noopener noreferrer";
+    creditLink.textContent = "Add OpenRouter credits ↗";
+    body.appendChild(creditLink);
   }
   $("chat").appendChild(node);
 }
@@ -485,11 +548,311 @@ async function repairBlockedReply() {
   }
 }
 
+function persistCloudSync() {
+  localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify({
+    enabled: Boolean(cloudSync.enabled),
+    code: cloudSync.code || "",
+    revision: Number(cloudSync.revision || 0),
+    lastSyncedAt: cloudSync.lastSyncedAt || "",
+    autoSync: cloudSync.autoSync !== false
+  }));
+}
+
+function setSyncStatus(message, kind = "") {
+  const el = $("syncStatus");
+  if (!el) return;
+  el.textContent = message;
+  el.className = `sync-status${kind ? ` ${kind}` : ""}`;
+}
+
+function encodeBase64Url(bytes) {
+  let binary = "";
+  bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function decodeBase64Url(value) {
+  const normalized = String(value || "").trim().replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
+}
+
+function normalizeSyncCode(value) {
+  return String(value || "").trim().replace(/\s+/g, "");
+}
+
+async function syncMaterial(codeValue = cloudSync.code) {
+  const code = normalizeSyncCode(codeValue);
+  let secret;
+  try { secret = decodeBase64Url(code); } catch { throw new Error("That sync code is not valid."); }
+  if (secret.length !== 32) throw new Error("That sync code is not valid.");
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", secret));
+  const id = encodeBase64Url(digest);
+  const key = await crypto.subtle.importKey("raw", secret, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+  return { code, id, key };
+}
+
+function cloudPayload() {
+  return {
+    app: "RP Studio",
+    formatVersion: 2,
+    savedAt: storyLibrary.updatedAt || new Date().toISOString(),
+    library: storyLibrary,
+    preferences: {
+      model: state.settings.model,
+      temperature: state.settings.temperature,
+      maxTokens: state.settings.maxTokens
+    }
+  };
+}
+
+async function encryptCloudPayload(payload, key) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plaintext = new TextEncoder().encode(JSON.stringify(payload));
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext));
+  return JSON.stringify({ version: 1, iv: encodeBase64Url(iv), data: encodeBase64Url(encrypted) });
+}
+
+async function decryptCloudPayload(ciphertext, key) {
+  try {
+    const envelope = JSON.parse(ciphertext);
+    if (envelope.version !== 1) throw new Error("Unsupported encrypted format.");
+    const iv = decodeBase64Url(envelope.iv);
+    const encrypted = decodeBase64Url(envelope.data);
+    const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
+    const payload = JSON.parse(new TextDecoder().decode(plaintext));
+    if (payload?.app !== "RP Studio" || !payload?.library?.stories) throw new Error("Invalid RP Studio data.");
+    return payload;
+  } catch {
+    throw new Error("The cloud copy could not be decrypted. Check that both devices use the exact same sync code.");
+  }
+}
+
+function connectionFromForm() {
+  return {
+    workerUrl: ($("workerUrl")?.value || state.settings.workerUrl || "").trim(),
+    appPassword: $("appPassword")?.value ?? state.settings.appPassword ?? "",
+    model: ($("model")?.value || state.settings.model || "openrouter/free").trim(),
+    temperature: Number($("temperature")?.value || state.settings.temperature || 0.9),
+    maxTokens: Number($("maxTokens")?.value || state.settings.maxTokens || 900)
+  };
+}
+
+function saveConnectionFromForm() {
+  state.settings = connectionFromForm();
+  localStorage.setItem("rp.settings", JSON.stringify(state.settings));
+}
+
+async function cloudRequest(method, body = null, codeValue = cloudSync.code) {
+  saveConnectionFromForm();
+  const { workerUrl, appPassword } = state.settings;
+  if (!workerUrl) throw new Error("Add your Worker URL first.");
+  if (!appPassword) throw new Error("Add your app password first.");
+  const material = await syncMaterial(codeValue);
+  const response = await fetch(`${workerUrl.replace(/\/$/, "")}/sync/${encodeURIComponent(material.id)}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      "X-App-Password": appPassword
+    },
+    body: body === null ? undefined : JSON.stringify(body)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || `Worker returned ${response.status}`);
+    error.status = response.status;
+    error.remoteRevision = Number(data.revision || 0);
+    throw error;
+  }
+  return { data, material };
+}
+
+function applyCloudPayload(payload) {
+  const incoming = payload.library;
+  storyLibrary = {
+    version: Number(incoming.version || 1),
+    activeId: incoming.stories[incoming.activeId] ? incoming.activeId : Object.keys(incoming.stories)[0],
+    stories: incoming.stories,
+    profiles: Array.isArray(incoming.profiles) ? incoming.profiles : [],
+    updatedAt: incoming.updatedAt || payload.savedAt || new Date().toISOString()
+  };
+  const current = storyLibrary.stories[storyLibrary.activeId];
+  state = {
+    settings: {
+      ...state.settings,
+      model: payload.preferences?.model || state.settings.model,
+      temperature: Number(payload.preferences?.temperature ?? state.settings.temperature),
+      maxTokens: Number(payload.preferences?.maxTokens ?? state.settings.maxTokens)
+    },
+    scenario: { ...defaults.scenario, ...(current.scenario || {}) },
+    messages: Array.isArray(current.messages) ? current.messages : [],
+    memory: { ...defaults.memory, ...(current.memory || {}) }
+  };
+  localStorage.setItem("rp.settings", JSON.stringify(state.settings));
+  localStorage.setItem("rp.stories", JSON.stringify(storyLibrary));
+  render();
+  if ($("libraryDialog")?.open) renderLibrary();
+  loadSettingsForm();
+}
+
+function scheduleCloudPush() {
+  if (!cloudSync.enabled || !cloudSync.autoSync || !syncRuntime.ready || syncRuntime.busy) return;
+  clearTimeout(syncRuntime.timer);
+  syncRuntime.timer = setTimeout(() => pushCloudCopy(), 1200);
+}
+
+async function pushCloudCopy(options = {}) {
+  if ((!syncRuntime.ready && !options.allowBeforeReady) || syncRuntime.busy || !cloudSync.enabled) return;
+  syncRuntime.busy = true;
+  setSyncStatus("Encrypting and uploading…", "working");
+  try {
+    const material = await syncMaterial();
+    const payload = cloudPayload();
+    const ciphertext = await encryptCloudPayload(payload, material.key);
+    const { data } = await cloudRequest("PUT", {
+      baseRevision: Number(cloudSync.revision || 0),
+      ciphertext
+    });
+    cloudSync.revision = Number(data.revision || cloudSync.revision + 1);
+    cloudSync.lastSyncedAt = storyLibrary.updatedAt;
+    persistCloudSync();
+    setSyncStatus(`Synced securely · revision ${cloudSync.revision}`, "success");
+  } catch (error) {
+    if (error.status === 409) {
+      setSyncStatus("Both devices have changes. Nothing was overwritten—tap Sync now to choose which copy to keep.", "error");
+    } else {
+      setSyncStatus(`Sync paused: ${error.message}`, "error");
+    }
+  } finally {
+    syncRuntime.busy = false;
+  }
+}
+
+async function fetchCloudCopy(codeValue = cloudSync.code) {
+  const { data, material } = await cloudRequest("GET", null, codeValue);
+  const payload = await decryptCloudPayload(data.ciphertext, material.key);
+  return { payload, revision: Number(data.revision || 0), material };
+}
+
+function isLocalDirty() {
+  return !cloudSync.lastSyncedAt || String(storyLibrary.updatedAt || "") > String(cloudSync.lastSyncedAt || "");
+}
+
+async function createCloudSync() {
+  saveConnectionFromForm();
+  const secret = crypto.getRandomValues(new Uint8Array(32));
+  cloudSync = { enabled: true, code: encodeBase64Url(secret), revision: 0, lastSyncedAt: "", autoSync: $("autoSync").checked };
+  $("syncCode").value = cloudSync.code;
+  persistCloudSync();
+  syncRuntime.ready = true;
+  try { await navigator.clipboard.writeText(cloudSync.code); } catch { /* Copy button remains available. */ }
+  setSyncStatus("Sync code created. Uploading this device’s library…", "working");
+  await pushCloudCopy({ allowBeforeReady: true });
+}
+
+async function connectCloudSync() {
+  saveConnectionFromForm();
+  const code = normalizeSyncCode($("syncCode").value);
+  await syncMaterial(code);
+  if (!confirm("Download the encrypted cloud library to this device? This replaces the stories and profiles currently stored in this browser. Connection details remain local.")) return;
+  setSyncStatus("Downloading and decrypting…", "working");
+  syncRuntime.busy = true;
+  try {
+    const remote = await fetchCloudCopy(code);
+    cloudSync = {
+      enabled: true,
+      code: remote.material.code,
+      revision: remote.revision,
+      lastSyncedAt: remote.payload.library.updatedAt || remote.payload.savedAt || "",
+      autoSync: $("autoSync").checked
+    };
+    applyCloudPayload(remote.payload);
+    persistCloudSync();
+    syncRuntime.ready = true;
+    setSyncStatus(`Connected and downloaded · revision ${cloudSync.revision}`, "success");
+  } finally {
+    syncRuntime.busy = false;
+  }
+}
+
+async function syncNow() {
+  if (!cloudSync.enabled || !cloudSync.code) throw new Error("Create or connect a sync code first.");
+  if (syncRuntime.busy) return;
+  setSyncStatus("Checking the cloud copy…", "working");
+  syncRuntime.busy = true;
+  try {
+    const remote = await fetchCloudCopy();
+    const localDirty = isLocalDirty();
+    if (remote.revision > Number(cloudSync.revision || 0)) {
+      if (localDirty && !confirm("This device and the cloud both changed. Press OK to keep the newer cloud copy on this device, or Cancel to keep this device unchanged. Nothing will be overwritten automatically.")) {
+        setSyncStatus("Conflict left untouched. Export a backup before choosing a copy.", "error");
+        return;
+      }
+      applyCloudPayload(remote.payload);
+      cloudSync.revision = remote.revision;
+      cloudSync.lastSyncedAt = storyLibrary.updatedAt;
+      persistCloudSync();
+      syncRuntime.ready = true;
+      setSyncStatus(`Downloaded newer cloud copy · revision ${cloudSync.revision}`, "success");
+      return;
+    }
+    cloudSync.revision = remote.revision;
+    syncRuntime.ready = true;
+    persistCloudSync();
+    if (localDirty) {
+      syncRuntime.busy = false;
+      await pushCloudCopy();
+    } else {
+      cloudSync.lastSyncedAt = storyLibrary.updatedAt;
+      persistCloudSync();
+      setSyncStatus(`Already up to date · revision ${cloudSync.revision}`, "success");
+    }
+  } finally {
+    syncRuntime.busy = false;
+  }
+}
+
+async function initializeCloudSync() {
+  if (!cloudSync.enabled || !cloudSync.code) {
+    setSyncStatus("Cloud sync is not connected.");
+    return;
+  }
+  $("syncCode").value = cloudSync.code;
+  $("autoSync").checked = cloudSync.autoSync !== false;
+  setSyncStatus("Checking for changes from your other device…", "working");
+  try {
+    const remote = await fetchCloudCopy();
+    const localDirty = isLocalDirty();
+    if (remote.revision > Number(cloudSync.revision || 0)) {
+      if (localDirty) {
+        setSyncStatus("Both devices have changes. Nothing was overwritten—open Settings and tap Sync now.", "error");
+        return;
+      }
+      applyCloudPayload(remote.payload);
+      cloudSync.revision = remote.revision;
+      cloudSync.lastSyncedAt = storyLibrary.updatedAt;
+      persistCloudSync();
+    } else {
+      cloudSync.revision = remote.revision;
+    }
+    syncRuntime.ready = true;
+    setSyncStatus(`Cloud sync ready · revision ${cloudSync.revision}`, "success");
+    if (localDirty && remote.revision === cloudSync.revision) scheduleCloudPush();
+  } catch (error) {
+    setSyncStatus(`Sync paused: ${error.message}`, "error");
+  }
+}
+
 function loadSettingsForm() {
   Object.entries(state.settings).forEach(([k,v]) => {
     const el = $(k);
     if (el) el.value = v;
   });
+  $("syncCode").value = cloudSync.code || "";
+  $("autoSync").checked = cloudSync.autoSync !== false;
+  if (cloudSync.enabled) setSyncStatus(`Connected · revision ${cloudSync.revision}`, "success");
+  else setSyncStatus("Cloud sync is not connected.");
 }
 
 function loadScenarioForm() {
@@ -576,6 +939,37 @@ $("duplicateStoryBtn").onclick = () => createStory(true);
 $("exportBtn").onclick = exportBackup;
 $("importBtn").onclick = () => $("importFile").click();
 $("importFile").onchange = (event) => importBackup(event.target.files[0]);
+$("createSyncBtn").onclick = () => createCloudSync().catch(error => setSyncStatus(error.message, "error"));
+$("connectSyncBtn").onclick = () => connectCloudSync().catch(error => setSyncStatus(error.message, "error"));
+$("copySyncBtn").onclick = async () => {
+  const code = normalizeSyncCode($("syncCode").value || cloudSync.code);
+  if (!code) return setSyncStatus("Create or paste a sync code first.", "error");
+  try {
+    await navigator.clipboard.writeText(code);
+    setSyncStatus("Sync code copied. Paste it into RP Studio on your other device.", "success");
+  } catch {
+    $("syncCode").focus();
+    $("syncCode").select();
+    setSyncStatus("The code is selected—use Copy from the browser menu.", "working");
+  }
+};
+$("syncNowBtn").onclick = () => syncNow().catch(error => setSyncStatus(error.message, "error"));
+$("autoSync").onchange = () => {
+  cloudSync.autoSync = $("autoSync").checked;
+  persistCloudSync();
+  if (cloudSync.autoSync) scheduleCloudPush();
+};
+$("disconnectSyncBtn").onclick = () => {
+  if (!cloudSync.enabled) return;
+  if (!confirm("Disconnect cloud sync on this device? Your local stories and encrypted cloud copy will remain intact.")) return;
+  clearTimeout(syncRuntime.timer);
+  cloudSync = { enabled: false, code: "", revision: 0, lastSyncedAt: "", autoSync: true };
+  syncRuntime.ready = false;
+  persistCloudSync();
+  $("syncCode").value = "";
+  $("autoSync").checked = true;
+  setSyncStatus("This device is disconnected. Local stories were not changed.");
+};
 $("saveProfileBtn").onclick = () => {
   const name = $("profileName").value.trim();
   const notes = $("profileNotes").value.trim();
@@ -594,13 +988,7 @@ $("input").addEventListener("keydown", (e) => {
 
 $("saveSettingsBtn").onclick = (e) => {
   e.preventDefault();
-  state.settings = {
-    workerUrl: $("workerUrl").value.trim(),
-    appPassword: $("appPassword").value,
-    model: $("model").value.trim() || "openrouter/free",
-    temperature: Number($("temperature").value || 0.9),
-    maxTokens: Number($("maxTokens").value || 900)
-  };
+  saveConnectionFromForm();
   save();
   $("settingsDialog").close();
 };
@@ -631,3 +1019,5 @@ $("clearBtn").onclick = () => {
 };
 
 render();
+loadSettingsForm();
+initializeCloudSync();
