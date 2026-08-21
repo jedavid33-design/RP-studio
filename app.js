@@ -56,6 +56,7 @@ let state = {
   settings: { ...defaults.settings, ...(JSON.parse(localStorage.getItem("rp.settings") || "{}")) },
   ...storyLibrary.stories[storyLibrary.activeId]
 };
+let pendingViolation = null;
 
 function save() {
   localStorage.setItem("rp.settings", JSON.stringify(state.settings));
@@ -80,39 +81,31 @@ function activateStory(id) {
 
 function systemPrompt() {
   const s = state.scenario;
-  return `You are the GM, narrator, and all NPCs in a contained interactive fiction role-play.
+  return `ROLE CONTRACT
+This is turn-based interactive fiction with a strict division of control.
+- USER role: ${s.playerName}. The user's latest message is completed, immutable canon.
+- ASSISTANT role: every NPC plus the objective environment.
+
+NPC CAMERA
+Continue only with NPC dialogue, NPC behavior, NPC thoughts, and objective events after the user's completed turn. The narrative camera may observe what NPCs do around ${s.playerName}, but it never supplies the player character's next action, words, thought, feeling, sensation, expression, perception, or decision. An NPC may address or approach the player in dialogue/action. Stop before the player's response is determined.
+
+TURN SHAPE
+Advance one meaningful beat through NPC choices or an external event, then hand control back naturally. Do not present a menu of choices. Do not repeat the user's prose. Write polished story prose only—no analysis, labels, instructions, or format tags.
 
 STORY PREMISE
 ${s.premise}
 
-PLAYER CHARACTER — EXCLUSIVELY USER CONTROLLED
-Name: ${s.playerName}
-Notes: ${s.playerNotes}
+PLAYER REFERENCE — FACTS ONLY, NOT AN ASSISTANT ROLE
+${s.playerName}: ${s.playerNotes}
 
-NPC / CAST NOTES
+NPC / CAST
 ${s.npcNotes}
 
-STYLE
+WRITING STYLE
 ${s.styleNotes}
 
-BOUNDARIES / EXTRA RULES
-${s.boundaryNotes}
-
-ABSOLUTE PLAYER-AGENCY RULE
-The user has exclusive control of ${s.playerName}. NEVER write, invent, imply, or decide ${s.playerName}'s dialogue, actions, gestures, facial expressions, thoughts, emotions, perceptions, intentions, choices, or physical reactions. Do not move ${s.playerName} through the scene. Do not finish ${s.playerName}'s sentences. Do not describe what ${s.playerName} "realizes," "feels," "notices," "wants," or "does." You may only refer to facts about ${s.playerName} that the user already established in their latest or prior messages.
-
-This prohibition includes seemingly harmless connective prose. Never write constructions such as "she looks," "she follows," "she lets," "she leans," "her breath catches," "her body responds," or "they kiss" unless that exact player action was already established by the user. An NPC may initiate an action toward ${s.playerName}, but the prose must stop before deciding whether it lands, is welcomed, or produces any response.
-
-Do not paraphrase, embellish, reinterpret, summarize, or narrate back the player's submitted dialogue or actions. Treat the user's latest message as completed canon and begin AFTER it. Outside NPC dialogue, avoid second-person narration entirely: do not write "you," "your," "you're," or sensory phrases such as "you see," "you hear," "you feel," "you notice," or "you catch." Describe only NPC behavior and objective environmental events. Never assign tone, volume, body language, sensation, attraction, familiarity, knowledge, or emotion to ${s.playerName}.
-
-You control every NPC and the environment. Write NPC dialogue, actions, thoughts, and observations freely. You may narrate environmental events that happen around the player. Advance the plot through NPC choices, discoveries, interruptions, external events, and consequences — never by taking control of the player character.
-
-Every response MUST end at a natural handoff point where ${s.playerName} can decide what to say/do next. If the scene cannot continue without deciding ${s.playerName}'s action, STOP instead of deciding it.
-
-OUTPUT FORMAT — REQUIRED
-Think and check the agency rules silently. Return only finished story prose enclosed in exactly one <story>...</story> block. Put no analysis, planning, self-check, preface, or commentary before or after the block. The text inside <story> must be ready to show the player directly.
-
-Do not add meta commentary, choices, or OOC notes unless the user asks.`;
+CONTENT BOUNDARIES
+${s.boundaryNotes}`;
 }
 
 function cleanStoryReply(raw) {
@@ -161,10 +154,10 @@ function render() {
   const uncompressed = Math.max(0, state.messages.length - state.memory.through);
   const memoryStatus = $("memoryStatus");
   memoryStatus.className = "memory-status";
-  if (uncompressed >= 16) {
+  if (uncompressed >= 24) {
     memoryStatus.textContent = `Refresh recommended · ${uncompressed} messages since memory checkpoint`;
     memoryStatus.classList.add("recommended");
-  } else if (uncompressed >= 10) {
+  } else if (uncompressed >= 16) {
     memoryStatus.textContent = `Refresh soon · ${uncompressed} messages since memory checkpoint`;
     memoryStatus.classList.add("soon");
   } else {
@@ -180,8 +173,10 @@ function render() {
   } else {
     state.messages.forEach(m => appendVisual(m.role, m.role === "user" ? state.scenario.playerName : "AI", m.content));
   }
-  $("retryBtn").disabled = !state.messages.some(m => m.role === "assistant");
-  $("hijackBtn").disabled = !state.messages.some(m => m.role === "assistant");
+  const lastUser = state.messages.map(m => m.role).lastIndexOf("user");
+  const lastAssistant = state.messages.map(m => m.role).lastIndexOf("assistant");
+  $("retryBtn").disabled = lastUser < 0;
+  $("hijackBtn").disabled = lastAssistant < lastUser;
   chat.scrollTop = chat.scrollHeight;
 }
 
@@ -312,7 +307,7 @@ async function requestAI(messages, options = {}) {
   return data.content;
 }
 
-async function callAI() {
+function buildTurnMessages(extraInstruction = "") {
   const recent = state.messages.slice(Math.min(state.memory.through, state.messages.length));
   const messages = [{ role: "system", content: systemPrompt() }];
   if (state.memory.summary) {
@@ -322,29 +317,47 @@ async function callAI() {
     });
   }
 
-  const latestUser = [...recent].map(m => m.role).lastIndexOf("user");
-  recent.forEach((message, index) => {
-    if (index === latestUser) {
-      messages.push({
-        role: "system",
-        content: `Immediate agency reminder: ${state.scenario.playerName} belongs exclusively to the user. Treat the next user message as completed canon, begin after it, and write only NPCs plus objective environment.`
-      });
-    }
-    messages.push(message);
-  });
+  recent.forEach(message => messages.push(message));
   messages.push({
     role: "system",
-    content: `FINAL TURN RULE — apply this to the response you are about to write: narrate only NPC choices/actions/dialogue and objective environment. Do not supply even one new action, sensation, expression, thought, emotion, or reaction for ${state.scenario.playerName}; do not paraphrase the user's move. Outside quoted NPC dialogue, do not write ${state.scenario.playerName}'s name or use any pronoun that refers to the player character. End before ${state.scenario.playerName}'s next decision or response. Silently remove any sentence that violates this, then output only <story> prose.`
+    content: `NEXT NPC TURN: Continue after the user's completed move. Keep the narrative camera on named NPCs and objective environment. End when ${state.scenario.playerName} must respond.`
   });
-  let reply = cleanStoryReply(await requestAI(messages));
-  if (hasAgencyViolation(reply)) {
+  if (extraInstruction) {
     messages.push({
       role: "system",
-      content: `AUTOMATIC AGENCY SHIELD: The previous draft failed validation because its narration referred to or took control of ${state.scenario.playerName}. Rewrite the turn now from scratch. NPC dialogue may address ${state.scenario.playerName}, but outside quoted NPC dialogue the narration must not contain the player's first name, surname, you/your language, or any pronoun referring to the player. Describe only named NPC actions/dialogue and objective environmental events. Stop before the player character's next action or reaction. Return only one complete <story>...</story> block.`
+      content: extraInstruction
     });
-    reply = cleanStoryReply(await requestAI(messages, { temperature: Math.min(Number(state.settings.temperature), 0.55) }));
   }
-  return reply;
+  return messages;
+}
+
+async function callAI(extraInstruction = "", options = {}) {
+  return cleanStoryReply(await requestAI(buildTurnMessages(extraInstruction), options));
+}
+
+function showAgencyBlock(reply, repeat = false) {
+  pendingViolation = reply;
+  $("blockedReply").textContent = reply;
+  $("agencyReason").textContent = repeat
+    ? "The repaired reply still tried to narrate your character. It remains blocked and has not entered the story."
+    : "The reply tried to narrate your character. It was blocked before entering the story or memory.";
+  if (!$("agencyDialog").open) $("agencyDialog").showModal();
+}
+
+function acceptReply(reply) {
+  state.messages.push({ role: "assistant", content: reply });
+  save();
+  render();
+}
+
+function acceptOrBlock(reply, repeat = false) {
+  if (hasAgencyViolation(reply)) {
+    showAgencyBlock(reply, repeat);
+    return false;
+  }
+  pendingViolation = null;
+  acceptReply(reply);
+  return true;
 }
 
 async function refreshMemory() {
@@ -372,7 +385,7 @@ async function refreshMemory() {
     state.memory = { summary, through: cutoff };
     save();
     render();
-    appendVisual("system", "Memory refreshed", `Older context compressed. Magnum will now reread the continuity memory plus the latest four exchanges instead of the entire transcript.`);
+    appendVisual("system", "Memory refreshed", `Older context compressed. The model will now reread the continuity memory plus the latest four exchanges instead of the entire transcript.`);
     $("chat").scrollTop = $("chat").scrollHeight;
   } catch (err) {
     appendVisual("system", "Memory error", err.message);
@@ -395,9 +408,7 @@ async function send() {
   $("sendBtn").textContent = "Writing…";
   try {
     const reply = await callAI();
-    state.messages.push({ role: "assistant", content: reply });
-    save();
-    render();
+    acceptOrBlock(reply);
   } catch (err) {
     appendVisual("system", "Error", err.message);
   } finally {
@@ -407,37 +418,52 @@ async function send() {
 }
 
 async function retry(agencyCorrection = false) {
-  const idx = [...state.messages].map(m => m.role).lastIndexOf("assistant");
-  if (idx < 0) return;
-  const rejectedReply = state.messages[idx].content;
-  state.messages.splice(idx, 1);
+  const roles = state.messages.map(m => m.role);
+  const assistantIdx = roles.lastIndexOf("assistant");
+  const userIdx = roles.lastIndexOf("user");
+  if (userIdx < 0) return;
+  if (assistantIdx > userIdx) {
+    state.messages.splice(assistantIdx, 1);
+  }
   save();
   render();
 
   $("retryBtn").disabled = true;
   $("hijackBtn").disabled = true;
-  const correction = agencyCorrection ? {
-    role: "system",
-    content: `The rejected reply below violated player agency by narrating, paraphrasing, or assigning perceptions/reactions to ${state.scenario.playerName}. Rewrite the scene from scratch. Preserve the user's message as completed canon, begin after it, and write only NPC actions/dialogue plus objective environmental events. Do not use second-person narration outside quoted NPC dialogue. Do not repeat any player-controlled material. Think silently, then return ONLY the corrected story inside one <story>...</story> block with nothing before or after it.\n\nREJECTED REPLY:\n${rejectedReply}`
-  } : null;
+  const correction = agencyCorrection
+    ? `REPAIR REQUEST: The rejected draft crossed the role boundary. Write a fresh NPC turn after the user's last completed move. Keep the camera entirely on named NPCs and objective environmental events. Stop before ${state.scenario.playerName}'s response. Do not echo the rejected prose.`
+    : "";
   try {
-    let reply;
-    if (correction) {
-      state.messages.push(correction);
-      reply = await callAI();
-      state.messages.pop();
-    } else {
-      reply = await callAI();
-    }
-    state.messages.push({ role: "assistant", content: reply });
-    save();
-    render();
+    const reply = await callAI(correction, correction ? { temperature: Math.min(Number(state.settings.temperature), 0.6) } : {});
+    acceptOrBlock(reply);
   } catch (err) {
-    if (correction && state.messages.at(-1) === correction) state.messages.pop();
     appendVisual("system", "Error", err.message);
   } finally {
-    $("retryBtn").disabled = false;
-    $("hijackBtn").disabled = false;
+    const finalRoles = state.messages.map(m => m.role);
+    const finalUser = finalRoles.lastIndexOf("user");
+    const finalAssistant = finalRoles.lastIndexOf("assistant");
+    $("retryBtn").disabled = finalUser < 0;
+    $("hijackBtn").disabled = finalAssistant < finalUser;
+  }
+}
+
+async function repairBlockedReply() {
+  if (!pendingViolation) return;
+  $("repairAgencyBtn").disabled = true;
+  $("repairAgencyBtn").textContent = "Repairing…";
+  try {
+    const reply = await callAI(
+      `REPAIR REQUEST: A draft was blocked for crossing the role boundary. Write a new NPC turn after the user's latest completed move. Use named NPCs and objective environmental events only. Stop before ${state.scenario.playerName} acts, thinks, feels, notices, answers, or decides.`,
+      { temperature: Math.min(Number(state.settings.temperature), 0.6) }
+    );
+    if (acceptOrBlock(reply, true)) $("agencyDialog").close();
+  } catch (err) {
+    $("agencyDialog").close();
+    appendVisual("system", "Repair error", err.message);
+    $("chat").scrollTop = $("chat").scrollHeight;
+  } finally {
+    $("repairAgencyBtn").disabled = false;
+    $("repairAgencyBtn").textContent = "Repair · uses 1 request";
   }
 }
 
@@ -519,6 +545,14 @@ $("sendBtn").onclick = send;
 $("retryBtn").onclick = () => retry(false);
 $("hijackBtn").onclick = () => retry(true);
 $("memoryBtn").onclick = refreshMemory;
+$("repairAgencyBtn").onclick = repairBlockedReply;
+$("showBlockedBtn").onclick = () => {
+  if (pendingViolation) acceptReply(pendingViolation);
+  pendingViolation = null;
+  $("agencyDialog").close();
+};
+$("discardBlockedBtn").onclick = () => { pendingViolation = null; $("agencyDialog").close(); render(); };
+$("closeAgencyBtn").onclick = () => { $("agencyDialog").close(); };
 $("newStoryBtn").onclick = () => createStory(false);
 $("duplicateStoryBtn").onclick = () => createStory(true);
 $("exportBtn").onclick = exportBackup;

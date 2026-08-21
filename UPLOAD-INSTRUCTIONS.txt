@@ -1,4 +1,4 @@
-RP Studio v1.0.5.2
+RP Studio v1.0.6
 
 Upload all seven files in this ZIP to the root of your RP-studio GitHub repository:
 index.html, style.css, app.js, manifest.webmanifest, apple-touch-icon.png,
@@ -29,5 +29,11 @@ the first reply fails the agency check.
 Version 1.0.5.2 expands the agency shield to catch third-person player takeover.
 The player's first name or surname outside quoted NPC dialogue now triggers the same
 automatic correction, and the prompt forbids player-referencing pronouns in narration.
+
+Version 1.0.6 replaces the accumulated prohibition-heavy prompt with a concise role
+contract and NPC-camera structure. Agency violations are blocked visibly instead of
+triggering a hidden paid retry: Repair costs one clearly labeled request, Use it anyway
+accepts the draft, and Discard removes it. Retry now works after provider/network errors.
+Memory notices now begin at 16 messages and recommend refreshing at 24.
 
 After GitHub Pages finishes deploying, fully close and reopen RP Studio.

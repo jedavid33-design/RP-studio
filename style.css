@@ -76,6 +76,11 @@ dialog::backdrop { background: rgba(54, 40, 64, .3); backdrop-filter: blur(8px);
 .panel input, .panel textarea, .panel select { display: block; width: 100%; margin-top: 7px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255, 255, 255, .84); color: var(--text); outline: none; }
 .panel input:focus, .panel textarea:focus, .panel select:focus { border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(169,139,217,.11); }
 .hint { color: var(--muted); font-size: 12px; line-height: 1.5; padding: 10px 12px; border-radius: 12px; background: rgba(239, 231, 246, .72); }
+.dialog-copy { color: var(--muted); line-height: 1.55; }
+.blocked-preview { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: rgba(249, 245, 252, .78); }
+.blocked-preview summary { cursor: pointer; color: var(--accent); font-weight: 700; }
+.blocked-preview pre { max-height: 34dvh; overflow: auto; margin: 12px 0 0; white-space: pre-wrap; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; color: var(--text); }
+.shield-actions { display: grid; gap: 8px; margin-top: 14px; }
 .panel h3 { margin: 24px 0 10px; font-family: Georgia, "Times New Roman", serif; font-size: 19px; }
 .library-list { display: grid; gap: 8px; }
 .library-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(249, 245, 252, .78); }

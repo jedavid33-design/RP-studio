@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.0.5.2" />
+  <link rel="stylesheet" href="style.css?v=1.0.6" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -19,7 +19,7 @@
   <div class="app">
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.0.5.2 · SAVED ON THIS DEVICE</div>
+        <div class="eyebrow">RP STUDIO · v1.0.6 · SAVED ON THIS DEVICE</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
@@ -63,6 +63,19 @@
     </form>
   </dialog>
 
+  <dialog id="agencyDialog">
+    <div class="panel">
+      <div class="panel-head"><div><div class="modal-kicker">Agency shield</div><h2>Reply blocked</h2></div><button class="icon-btn" id="closeAgencyBtn" aria-label="Close">✕</button></div>
+      <p class="dialog-copy" id="agencyReason">The reply tried to narrate your character, so it was not added to the story.</p>
+      <details class="blocked-preview"><summary>Preview blocked reply</summary><pre id="blockedReply"></pre></details>
+      <div class="shield-actions">
+        <button type="button" id="repairAgencyBtn" class="primary">Repair · uses 1 request</button>
+        <button type="button" id="showBlockedBtn" class="secondary">Use it anyway</button>
+        <button type="button" id="discardBlockedBtn" class="warning">Discard</button>
+      </div>
+    </div>
+  </dialog>
+
   <dialog id="libraryDialog">
     <form method="dialog" class="panel">
       <div class="panel-head"><div><div class="modal-kicker">Your collection</div><h2>Story library</h2></div><button class="icon-btn" value="cancel" aria-label="Close">✕</button></div>
@@ -102,6 +115,6 @@
   </dialog>
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
-  <script src="app.js?v=1.0.5.2"></script>
+  <script src="app.js?v=1.0.6"></script>
 </body>
 </html>
