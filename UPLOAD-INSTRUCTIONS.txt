@@ -1,6 +1,8 @@
-RP Studio v1.0.3
+RP Studio v1.0.4
 
-Upload index.html, style.css, and app.js to the root of your RP-studio GitHub repository.
+Upload all seven files in this ZIP to the root of your RP-studio GitHub repository:
+index.html, style.css, app.js, manifest.webmanifest, apple-touch-icon.png,
+icon-192.png, and icon-512.png.
 Choose Replace when GitHub warns that files with those names already exist.
 
 This update does not erase your saved story, settings, Worker URL, app password,
@@ -9,5 +11,10 @@ regenerates it with an explicit player-agency correction.
 
 Version 1.0.3 also removes exposed AI planning/reasoning and displays only the
 finished story prose.
+
+Version 1.0.4 adds manual continuity memory. Refresh memory compresses older
+turns for the model while keeping the complete transcript visible and saved.
+It also strengthens the automatic player-agency guard, adds the neon quill-and-book
+Home Screen icon, and changes the interface to a lighter opal theme.
 
 After GitHub Pages finishes deploying, fully close and reopen RP Studio.

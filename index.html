@@ -3,12 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#171223" />
+  <meta name="theme-color" content="#f8f4fb" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="RP Studio" />
   <title>Story RP Studio</title>
-  <link rel="stylesheet" href="style.css?v=1.0.3" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <link rel="stylesheet" href="style.css?v=1.0.4" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -16,7 +19,7 @@
   <div class="app">
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.0.3 · SAVED ON THIS DEVICE</div>
+        <div class="eyebrow">RP STUDIO · v1.0.4 · SAVED ON THIS DEVICE</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button>
@@ -29,10 +32,12 @@
         <div class="who-row">
           <span class="chip" id="playerChip">You</span>
           <div class="story-actions">
+            <button class="text-btn" id="memoryBtn">Refresh memory</button>
             <button class="text-btn" id="editScenarioBtn">✦ Edit story</button>
             <button class="text-btn" id="clearBtn">New session</button>
           </div>
         </div>
+        <div class="memory-status" id="memoryStatus">Full transcript in context</div>
         <textarea id="input" rows="4" placeholder="Write what your character says, does, or thinks…"></textarea>
         <div class="composer-actions">
           <div class="retry-actions">
