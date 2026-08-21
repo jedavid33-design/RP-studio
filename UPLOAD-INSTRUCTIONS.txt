@@ -1,4 +1,4 @@
-RP Studio v1.0.6
+RP Studio v1.0.6.1
 
 Upload all seven files in this ZIP to the root of your RP-studio GitHub repository:
 index.html, style.css, app.js, manifest.webmanifest, apple-touch-icon.png,
@@ -35,5 +35,10 @@ contract and NPC-camera structure. Agency violations are blocked visibly instead
 triggering a hidden paid retry: Repair costs one clearly labeled request, Use it anyway
 accepts the draft, and Discard removes it. Retry now works after provider/network errors.
 Memory notices now begin at 16 messages and recommend refreshing at 24.
+
+Version 1.0.6.1 makes the agency detector grammar-aware. Harmless references to the
+player's established position or presence are allowed, while player-subject actions,
+thoughts, perceptions, body reactions, speech, decisions, and completed physical
+control by NPCs remain blocked.
 
 After GitHub Pages finishes deploying, fully close and reopen RP Studio.

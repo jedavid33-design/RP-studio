@@ -126,19 +126,37 @@ function cleanStoryReply(raw) {
 }
 
 function hasAgencyViolation(reply) {
-  // NPCs may say "you" in dialogue. Remove quoted dialogue before checking
-  // narration for the second-person language the agency contract forbids.
+  // NPC dialogue may address the player freely. Inspect narration only.
   const narrationOnly = String(reply || "")
     .replace(/“[^”]*”/gs, " ")
     .replace(/"[^"\n]*"/g, " ");
-  const nameParts = String(state.scenario.playerName || "")
+  if (/\b(?:you|your|yours|yourself|you're|you've|you'll|you'd)\b/i.test(narrationOnly)) return true;
+
+  const rawNameParts = String(state.scenario.playerName || "")
     .split(/\s+/)
-    .map(part => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .filter(part => part.length > 1);
-  const playerNamedInNarration = nameParts.length
-    ? new RegExp(`\\b(?:${nameParts.join("|")})\\b`, "i").test(narrationOnly)
-    : false;
-  return playerNamedInNarration || /\b(?:you|your|yours|yourself|you're|you've|you'll|you'd)\b/i.test(narrationOnly);
+  if (!rawNameParts.length) return false;
+  const escapeRegex = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const fullName = escapeRegex(rawNameParts.join(" "));
+  const nameParts = rawNameParts.map(escapeRegex);
+  const playerRef = `(?:${[fullName, ...nameParts].join("|")})`;
+
+  // Player named as the subject of an action, perception, decision, speech,
+  // movement, or state. Harmless object references such as "behind Jace" pass.
+  const playerVerbs = "(?:is|was|remains?|remained|becomes?|became|steps?|stepped|moves?|moved|walks?|walked|follows?|followed|nods?|nodded|shakes?|shook|looks?|looked|glances?|glanced|watches?|watched|sees?|saw|hears?|heard|notices?|noticed|feels?|felt|thinks?|thought|wonders?|wondered|realizes?|realized|knows?|knew|wants?|wanted|needs?|needed|decides?|decided|chooses?|chose|reaches?|reached|takes?|took|accepts?|accepted|allows?|allowed|lets?|let|leans?|leaned|turns?|turned|pauses?|paused|hesitates?|hesitated|freezes?|froze|smiles?|smiled|frowns?|frowned|laughs?|laughed|breathes?|breathed|sighs?|sighed|gasps?|gasped|replies?|replied|says?|said|asks?|asked|answers?|answered|murmurs?|murmured|whispers?|whispered|speaks?|spoke|opens?|opened|closes?|closed|enters?|entered|leaves?|left|sits?|sat|stands?|stood|waits?|waited|listens?|listened|approaches?|approached|retreats?|retreated|recoils?|recoiled|reacts?|reacted|responds?|responded|stiffens?|stiffened|relaxes?|relaxed|shivers?|shivered|trembles?|trembled|swallows?|swallowed|blushes?|blushed|focuses?|focused|studies?|studied|considers?|considered|finds?|found|drifts?|drifted)";
+  const playerAsSubject = new RegExp(`\\b${playerRef}\\b(?:\\s*,[^.!?]{0,45},)?\\s+(?:\\w+ly\\s+)?${playerVerbs}\\b`, "i");
+  if (playerAsSubject.test(narrationOnly)) return true;
+
+  // Internal state or involuntary body language assigned through a possessive.
+  const controlledPossessive = "(?:eyes?|gaze|hands?|fingers?|breath|heart|pulse|stomach|body|mind|thoughts?|attention|expression|face|voice|grip|feet|knees?|shoulders?|posture|muscles?|skin|cheeks?|lips?|head)";
+  const playerBody = new RegExp(`\\b${playerRef}(?:'s|’s)\\s+${controlledPossessive}\\b`, "i");
+  if (playerBody.test(narrationOnly)) return true;
+
+  // NPC narration that completes physical control of the player rather than
+  // merely initiating or offering an action.
+  const forcedContact = "(?:grabs?|seizes?|pulls?|pushes?|drags?|guides?|leads?|moves?|lifts?|carries?|pins?|restrains?|touches?|kisses?|holds?)";
+  const playerAsControlledObject = new RegExp(`\\b${forcedContact}\\s+(?:${playerRef}|${playerRef}(?:'s|’s)\\s+(?:arm|hand|wrist|waist|face|chin|body))\\b`, "i");
+  return playerAsControlledObject.test(narrationOnly);
 }
 
 function cleanMemoryReply(raw) {
