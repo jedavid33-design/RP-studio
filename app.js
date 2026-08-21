@@ -24,18 +24,58 @@ const defaults = {
   }
 };
 
+const makeId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const makeStory = (scenario = defaults.scenario, messages = [], memory = defaults.memory) => ({
+  scenario: { ...defaults.scenario, ...scenario },
+  messages: Array.isArray(messages) ? messages : [],
+  memory: { ...defaults.memory, ...memory },
+  updatedAt: new Date().toISOString()
+});
+
+let storyLibrary;
+try { storyLibrary = JSON.parse(localStorage.getItem("rp.stories") || "null"); } catch { storyLibrary = null; }
+if (!storyLibrary || !storyLibrary.stories || !Object.keys(storyLibrary.stories).length) {
+  const migratedId = makeId();
+  storyLibrary = {
+    version: 1,
+    activeId: migratedId,
+    stories: {
+      [migratedId]: makeStory(
+        JSON.parse(localStorage.getItem("rp.scenario") || "{}"),
+        JSON.parse(localStorage.getItem("rp.messages") || "[]"),
+        JSON.parse(localStorage.getItem("rp.memory") || "{}")
+      )
+    },
+    profiles: []
+  };
+}
+storyLibrary.profiles = Array.isArray(storyLibrary.profiles) ? storyLibrary.profiles : [];
+if (!storyLibrary.stories[storyLibrary.activeId]) storyLibrary.activeId = Object.keys(storyLibrary.stories)[0];
+
 let state = {
   settings: { ...defaults.settings, ...(JSON.parse(localStorage.getItem("rp.settings") || "{}")) },
-  scenario: { ...defaults.scenario, ...(JSON.parse(localStorage.getItem("rp.scenario") || "{}")) },
-  messages: JSON.parse(localStorage.getItem("rp.messages") || "[]"),
-  memory: { ...defaults.memory, ...(JSON.parse(localStorage.getItem("rp.memory") || "{}")) }
+  ...storyLibrary.stories[storyLibrary.activeId]
 };
 
 function save() {
   localStorage.setItem("rp.settings", JSON.stringify(state.settings));
-  localStorage.setItem("rp.scenario", JSON.stringify(state.scenario));
-  localStorage.setItem("rp.messages", JSON.stringify(state.messages));
-  localStorage.setItem("rp.memory", JSON.stringify(state.memory));
+  storyLibrary.stories[storyLibrary.activeId] = {
+    scenario: state.scenario,
+    messages: state.messages,
+    memory: state.memory,
+    updatedAt: new Date().toISOString()
+  };
+  localStorage.setItem("rp.stories", JSON.stringify(storyLibrary));
+}
+
+function activateStory(id) {
+  if (!storyLibrary.stories[id]) return;
+  save();
+  storyLibrary.activeId = id;
+  const story = storyLibrary.stories[id];
+  state = { settings: state.settings, scenario: { ...story.scenario }, messages: [...story.messages], memory: { ...story.memory } };
+  save();
+  render();
 }
 
 function systemPrompt() {
@@ -99,9 +139,20 @@ function render() {
   $("storyTitle").textContent = state.scenario.title;
   $("playerChip").textContent = `You: ${state.scenario.playerName}`;
   $("hijackBtn").textContent = `Hands off ${state.scenario.playerName}`;
-  $("memoryStatus").textContent = state.memory.summary
-    ? `Memory covers ${state.memory.through} messages`
-    : "Full transcript in context";
+  const uncompressed = Math.max(0, state.messages.length - state.memory.through);
+  const memoryStatus = $("memoryStatus");
+  memoryStatus.className = "memory-status";
+  if (uncompressed >= 16) {
+    memoryStatus.textContent = `Refresh recommended · ${uncompressed} messages since memory checkpoint`;
+    memoryStatus.classList.add("recommended");
+  } else if (uncompressed >= 10) {
+    memoryStatus.textContent = `Refresh soon · ${uncompressed} messages since memory checkpoint`;
+    memoryStatus.classList.add("soon");
+  } else {
+    memoryStatus.textContent = state.memory.summary
+      ? `Memory fresh · latest ${uncompressed} messages in full`
+      : `Memory fresh · ${uncompressed} messages in context`;
+  }
   const chat = $("chat");
   chat.innerHTML = "";
 
@@ -113,6 +164,88 @@ function render() {
   $("retryBtn").disabled = !state.messages.some(m => m.role === "assistant");
   $("hijackBtn").disabled = !state.messages.some(m => m.role === "assistant");
   chat.scrollTop = chat.scrollHeight;
+}
+
+function renderLibrary() {
+  const storyList = $("storyList");
+  storyList.innerHTML = "";
+  Object.entries(storyLibrary.stories)
+    .sort((a, b) => String(b[1].updatedAt).localeCompare(String(a[1].updatedAt)))
+    .forEach(([id, story]) => {
+      const card = document.createElement("div");
+      card.className = `library-card${id === storyLibrary.activeId ? " active" : ""}`;
+      const main = document.createElement("div");
+      main.className = "library-card-main";
+      const title = document.createElement("div");
+      title.className = "library-card-title";
+      title.textContent = story.scenario.title || "Untitled Story";
+      const note = document.createElement("div");
+      note.className = "library-card-note";
+      note.textContent = `${story.messages.length} messages${id === storyLibrary.activeId ? " · Current" : ""}`;
+      main.append(title, note);
+      const actions = document.createElement("div");
+      actions.className = "library-card-actions";
+      if (id !== storyLibrary.activeId) {
+        const open = document.createElement("button");
+        open.type = "button"; open.className = "secondary"; open.textContent = "Open";
+        open.onclick = () => { activateStory(id); renderLibrary(); };
+        actions.appendChild(open);
+      }
+      if (Object.keys(storyLibrary.stories).length > 1) {
+        const remove = document.createElement("button");
+        remove.type = "button"; remove.className = "warning"; remove.textContent = "Delete";
+        remove.onclick = () => deleteStory(id);
+        actions.appendChild(remove);
+      }
+      card.append(main, actions);
+      storyList.appendChild(card);
+    });
+
+  const profileList = $("profileList");
+  profileList.innerHTML = storyLibrary.profiles.length ? "" : "No saved profiles yet.";
+  storyLibrary.profiles.forEach(profile => {
+    const card = document.createElement("div");
+    card.className = "library-card";
+    const main = document.createElement("div");
+    main.className = "library-card-main";
+    const title = document.createElement("div"); title.className = "library-card-title"; title.textContent = profile.name;
+    const note = document.createElement("div"); note.className = "library-card-note"; note.textContent = profile.notes.slice(0, 80) || "No notes";
+    main.append(title, note);
+    const actions = document.createElement("div"); actions.className = "library-card-actions";
+    const player = document.createElement("button"); player.type = "button"; player.className = "secondary"; player.textContent = "Use as player";
+    player.onclick = () => { state.scenario.playerName = profile.name; state.scenario.playerNotes = profile.notes; save(); render(); $("libraryDialog").close(); };
+    const npc = document.createElement("button"); npc.type = "button"; npc.className = "secondary"; npc.textContent = "Add as NPC";
+    npc.onclick = () => { state.scenario.npcNotes = [state.scenario.npcNotes, `${profile.name} — ${profile.notes}`].filter(Boolean).join("\n\n"); save(); $("libraryDialog").close(); };
+    const remove = document.createElement("button"); remove.type = "button"; remove.className = "warning"; remove.textContent = "Delete";
+    remove.onclick = () => { if (confirm(`Delete the ${profile.name} profile?`)) { storyLibrary.profiles = storyLibrary.profiles.filter(p => p.id !== profile.id); save(); renderLibrary(); } };
+    actions.append(player, npc, remove); card.append(main, actions); profileList.appendChild(card);
+  });
+}
+
+function createStory(duplicate = false) {
+  save();
+  const id = makeId();
+  if (duplicate) {
+    const title = `${state.scenario.title} — Copy`;
+    storyLibrary.stories[id] = makeStory({ ...state.scenario, title }, [], defaults.memory);
+  } else {
+    storyLibrary.stories[id] = makeStory({ ...defaults.scenario, title: "New Story" });
+  }
+  activateStory(id);
+  renderLibrary();
+  $("libraryDialog").close();
+  loadScenarioForm();
+  $("scenarioDialog").showModal();
+}
+
+function deleteStory(id) {
+  const title = storyLibrary.stories[id]?.scenario?.title || "this story";
+  if (!confirm(`Delete “${title}” and its entire transcript?`)) return;
+  delete storyLibrary.stories[id];
+  if (id === storyLibrary.activeId) storyLibrary.activeId = Object.keys(storyLibrary.stories)[0];
+  const current = storyLibrary.stories[storyLibrary.activeId];
+  state = { settings: state.settings, scenario: { ...current.scenario }, messages: [...current.messages], memory: { ...current.memory } };
+  save(); render(); renderLibrary();
 }
 
 function appendVisual(role, label, content) {
@@ -283,14 +416,88 @@ function loadScenarioForm() {
     npcNotes: "npcNotes", premise: "premise", styleNotes: "styleNotes", boundaryNotes: "boundaryNotes"
   };
   Object.entries(map).forEach(([id,k]) => $(id).value = state.scenario[k]);
+  const select = $("playerProfile");
+  select.innerHTML = '<option value="">Choose a profile…</option>';
+  storyLibrary.profiles.forEach(profile => {
+    const option = document.createElement("option");
+    option.value = profile.id;
+    option.textContent = profile.name;
+    select.appendChild(option);
+  });
+}
+
+function exportBackup() {
+  save();
+  const payload = {
+    app: "RP Studio",
+    formatVersion: 1,
+    exportedAt: new Date().toISOString(),
+    library: storyLibrary
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `RP-Studio-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function importBackup(file) {
+  if (!file) return;
+  try {
+    const payload = JSON.parse(await file.text());
+    const incoming = payload?.app === "RP Studio" ? payload.library : null;
+    if (!incoming?.stories || !Object.keys(incoming.stories).length) throw new Error("That file is not a valid RP Studio backup.");
+    if (!confirm("Import this backup? It will replace the stories and profiles currently saved in this browser. Your connection settings will stay unchanged.")) return;
+    storyLibrary = {
+      version: 1,
+      activeId: incoming.stories[incoming.activeId] ? incoming.activeId : Object.keys(incoming.stories)[0],
+      stories: incoming.stories,
+      profiles: Array.isArray(incoming.profiles) ? incoming.profiles : []
+    };
+    const current = storyLibrary.stories[storyLibrary.activeId];
+    state = {
+      settings: state.settings,
+      scenario: { ...defaults.scenario, ...(current.scenario || {}) },
+      messages: Array.isArray(current.messages) ? current.messages : [],
+      memory: { ...defaults.memory, ...(current.memory || {}) }
+    };
+    save(); render(); renderLibrary(); $("libraryDialog").close();
+    alert("Backup imported successfully.");
+  } catch (error) {
+    alert(error.message || "The backup could not be imported.");
+  } finally {
+    $("importFile").value = "";
+  }
 }
 
 $("settingsBtn").onclick = () => { loadSettingsForm(); $("settingsDialog").showModal(); };
+$("libraryBtn").onclick = () => { renderLibrary(); $("libraryDialog").showModal(); };
 $("editScenarioBtn").onclick = () => { loadScenarioForm(); $("scenarioDialog").showModal(); };
 $("sendBtn").onclick = send;
 $("retryBtn").onclick = () => retry(false);
 $("hijackBtn").onclick = () => retry(true);
 $("memoryBtn").onclick = refreshMemory;
+$("newStoryBtn").onclick = () => createStory(false);
+$("duplicateStoryBtn").onclick = () => createStory(true);
+$("exportBtn").onclick = exportBackup;
+$("importBtn").onclick = () => $("importFile").click();
+$("importFile").onchange = (event) => importBackup(event.target.files[0]);
+$("saveProfileBtn").onclick = () => {
+  const name = $("profileName").value.trim();
+  const notes = $("profileNotes").value.trim();
+  if (!name) return alert("Give the character profile a name first.");
+  storyLibrary.profiles.push({ id: makeId(), name, notes });
+  $("profileName").value = ""; $("profileNotes").value = "";
+  save(); renderLibrary();
+};
+$("playerProfile").onchange = (event) => {
+  const profile = storyLibrary.profiles.find(p => p.id === event.target.value);
+  if (profile) { $("playerName").value = profile.name; $("playerNotes").value = profile.notes; }
+};
 $("input").addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send();
 });

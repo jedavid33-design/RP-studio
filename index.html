@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.0.4" />
+  <link rel="stylesheet" href="style.css?v=1.0.5" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -19,10 +19,10 @@
   <div class="app">
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.0.4 · SAVED ON THIS DEVICE</div>
+        <div class="eyebrow">RP STUDIO · v1.0.5 · SAVED ON THIS DEVICE</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
-      <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button>
+      <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
     </header>
 
     <main id="chat" class="chat" aria-live="polite"></main>
@@ -63,11 +63,35 @@
     </form>
   </dialog>
 
+  <dialog id="libraryDialog">
+    <form method="dialog" class="panel">
+      <div class="panel-head"><div><div class="modal-kicker">Your collection</div><h2>Story library</h2></div><button class="icon-btn" value="cancel" aria-label="Close">✕</button></div>
+      <div id="storyList" class="library-list"></div>
+      <div class="library-actions">
+        <button type="button" id="newStoryBtn" class="primary">＋ New story</button>
+        <button type="button" id="duplicateStoryBtn" class="secondary">Duplicate current</button>
+      </div>
+      <h3>Character profiles</h3>
+      <div id="profileList" class="library-list"></div>
+      <label>Profile name<input id="profileName" placeholder="Olivia" /></label>
+      <label>Character notes<textarea id="profileNotes" rows="4" placeholder="Appearance, personality, history, boundaries…"></textarea></label>
+      <button type="button" id="saveProfileBtn" class="secondary full-width">Save new profile</button>
+      <h3>Portable backup</h3>
+      <div class="hint">Exports every story, transcript, memory, and character profile. Connection details and passwords are never included.</div>
+      <div class="library-actions">
+        <button type="button" id="exportBtn" class="secondary">Export backup</button>
+        <button type="button" id="importBtn" class="secondary">Import backup</button>
+        <input id="importFile" type="file" accept="application/json,.json" hidden />
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="scenarioDialog">
     <form method="dialog" class="panel">
       <div class="panel-head"><div><div class="modal-kicker">Your world</div><h2>Story setup</h2></div><button class="icon-btn" value="cancel" aria-label="Close">✕</button></div>
       <label>Story title<input id="scenarioTitle" value="Trapped Hearts-ish Test" /></label>
       <label>Your character<input id="playerName" value="Olivia" /></label>
+      <label>Load a saved character<select id="playerProfile"><option value="">Choose a profile…</option></select></label>
       <label>Your character notes<textarea id="playerNotes" rows="4">A sharp, ambitious attorney. The USER controls Olivia completely.</textarea></label>
       <label>AI character(s)<textarea id="npcNotes" rows="6">Caleb Quinn — Olivia's brilliant, infuriating colleague. Confident, observant, dryly funny, and much more emotionally perceptive than Olivia gives him credit for.</textarea></label>
       <label>Premise / contained story<textarea id="premise" rows="7">Olivia and Caleb are rival attorneys at the same firm. After months of professional friction and unresolved attraction, they become trapped together in an elevator during a blackout. The story should unfold as a contained forced-proximity romance with gradual reveals, tension, banter, and a clear forward-moving plot.</textarea></label>
@@ -78,6 +102,6 @@
   </dialog>
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
-  <script src="app.js"></script>
+  <script src="app.js?v=1.0.5"></script>
 </body>
 </html>
