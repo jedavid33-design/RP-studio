@@ -108,6 +108,9 @@ This is turn-based interactive fiction with a strict division of control.
 NPC CAMERA
 Continue only with NPC dialogue, NPC behavior, NPC thoughts, and objective events after the user's completed turn. The narrative camera may observe what NPCs do around ${s.playerName}, but it never supplies the player character's next action, words, thought, feeling, sensation, expression, perception, or decision. An NPC may address or approach the player in dialogue/action. Stop before the player's response is determined.
 
+PLAYER POV FIREWALL
+The user's prose may use first person, second person, or third person. Never mirror the user's player-character POV. In assistant narration, never use "you" or "your" and never use ${s.playerName} (or a pronoun referring to ${s.playerName}) as the subject of a new action, movement, posture, expression, sensation, perception, recognition, thought, feeling, conclusion, or decision. Treat every player action and position in the latest user message as finished and frozen at the handoff: do not extend it, restage it, paraphrase it, or add body language. Start with an NPC or an objective environmental event and write around the player. "You" may appear only inside NPC dialogue addressed to the player.
+
 TURN SHAPE
 Advance one meaningful beat through NPC choices or an external event, then hand control back naturally. Do not present a menu of choices. Do not repeat the user's prose. Write polished story prose only—no analysis, labels, instructions, or format tags.
 
@@ -139,6 +142,12 @@ function cleanStoryReply(raw) {
   // Some models emit the opening tag but forget the closing tag. Strip any
   // orphaned output markers so they can never appear in the story card.
   cleaned = cleaned.replace(/<\/?story\b[^>]*>/gi, "").trim();
+  // A few RP models echo a final instruction header before the prose. It is
+  // never story content, so discard that first line instead of displaying it.
+  if (/^(?:NEXT NPC TURN|REPAIR REQUEST|ONE-TURN CORRECTION)\s*:/i.test(cleaned)) {
+    const firstLineEnd = cleaned.indexOf("\n");
+    cleaned = firstLineEnd >= 0 ? cleaned.slice(firstLineEnd + 1).trim() : "";
+  }
   const trailingMeta = cleaned.search(/\n\s*\n(?:we must (?:ensure|check|avoid)|self-check:|analysis:)/i);
   if (trailingMeta >= 0) cleaned = cleaned.slice(0, trailingMeta).trim();
   return cleaned;
@@ -186,7 +195,7 @@ function hasAgencyViolation(reply) {
 
   // Player named as the subject of an action, perception, decision, speech,
   // movement, or state. Harmless object references such as "behind Jace" pass.
-  const playerVerbs = "(?:steps?|stepped|moves?|moved|walks?|walked|follows?|followed|nods?|nodded|shakes?|shook|looks?|looked|glances?|glanced|watches?|watched|sees?|saw|hears?|heard|notices?|noticed|feels?|felt|thinks?|thought|wonders?|wondered|realizes?|realized|knows?|knew|wants?|wanted|needs?|needed|decides?|decided|chooses?|chose|reaches?|reached|takes?|took|accepts?|accepted|allows?|allowed|lets?|let|leans?|leaned|turns?|turned|pauses?|paused|hesitates?|hesitated|freezes?|froze|smiles?|smiled|frowns?|frowned|laughs?|laughed|breathes?|breathed|sighs?|sighed|gasps?|gasped|replies?|replied|says?|said|asks?|asked|answers?|answered|murmurs?|murmured|whispers?|whispered|speaks?|spoke|opens?|opened|closes?|closed|enters?|entered|leaves?|left|sits?|sat|stands?|stood|waits?|waited|listens?|listened|approaches?|approached|retreats?|retreated|recoils?|recoiled|reacts?|reacted|responds?|responded|stiffens?|stiffened|relaxes?|relaxed|shivers?|shivered|trembles?|trembled|swallows?|swallowed|blushes?|blushed|focuses?|focused|studies?|studied|considers?|considered|finds?|found|drifts?|drifted)";
+  const playerVerbs = "(?:steps?|stepped|moves?|moved|walks?|walked|follows?|followed|nods?|nodded|shakes?|shook|looks?|looked|glances?|glanced|watches?|watched|sees?|saw|hears?|heard|notices?|noticed|recognizes?|recognized|understands?|understood|remembers?|remembered|suspects?|suspected|feels?|felt|thinks?|thought|wonders?|wondered|realizes?|realized|knows?|knew|wants?|wanted|needs?|needed|decides?|decided|chooses?|chose|reaches?|reached|takes?|took|accepts?|accepted|allows?|allowed|lets?|let|leans?|leaned|turns?|turned|pauses?|paused|hesitates?|hesitated|freezes?|froze|smiles?|smiled|frowns?|frowned|laughs?|laughed|breathes?|breathed|sighs?|sighed|gasps?|gasped|replies?|replied|says?|said|asks?|asked|answers?|answered|murmurs?|murmured|whispers?|whispered|speaks?|spoke|opens?|opened|closes?|closed|enters?|entered|leaves?|left|sits?|sat|stands?|stood|waits?|waited|listens?|listened|approaches?|approached|retreats?|retreated|recoils?|recoiled|reacts?|reacted|responds?|responded|stiffens?|stiffened|relaxes?|relaxed|shivers?|shivered|trembles?|trembled|swallows?|swallowed|blushes?|blushed|focuses?|focused|studies?|studied|considers?|considered|finds?|found|drifts?|drifted)";
   const playerAsSubject = new RegExp(`\\b${playerRef}\\b(?:\\s*,[^.!?]{0,45},)?\\s+(?:\\w+ly\\s+)?${playerVerbs}\\b`, "i");
   if (playerAsSubject.test(narrationOnly)) return true;
 
@@ -198,7 +207,7 @@ function hasAgencyViolation(reply) {
   if (playerState.test(narrationOnly)) return true;
 
   // Internal state or involuntary body language assigned through a possessive.
-  const controlledPossessive = "(?:eyes?|gaze|hands?|fingers?|breath|heart|pulse|stomach|body|mind|thoughts?|attention|expression|face|voice|grip|feet|knees?|shoulders?|posture|muscles?|skin|cheeks?|lips?|head)";
+  const controlledPossessive = "(?:eyes?|gaze|hands?|fingers?|breath|heart|pulse|stomach|body|mind|thoughts?|attention|expression|face|voice|grip|feet|footsteps?|knees?|shoulders?|posture|muscles?|skin|cheeks?|lips?|head)";
   const playerBody = new RegExp(`\\b${playerRef}(?:'s|’s)\\s+${controlledPossessive}\\b`, "i");
   if (playerBody.test(narrationOnly)) return true;
 
@@ -390,7 +399,11 @@ async function requestAI(messages, options = {}) {
 
 function buildTurnMessages(extraInstruction = "") {
   const recent = state.messages.slice(Math.min(state.memory.through, state.messages.length));
-  const messages = [{ role: "system", content: systemPrompt() }];
+  // Some storytelling models echo or mishandle a system message placed after
+  // the transcript. Keep every control instruction in the leading system turn.
+  const turnControl = `NEXT-TURN CONTROL\nContinue after the user's completed move. Begin with a named NPC or an objective environmental event. Do not narrate, extend, restage, or perceive through ${state.scenario.playerName}. End when ${state.scenario.playerName} must respond.`;
+  const correction = extraInstruction ? `\n\nONE-TURN CORRECTION\n${extraInstruction}` : "";
+  const messages = [{ role: "system", content: `${systemPrompt()}\n\n${turnControl}${correction}` }];
   if (state.memory.summary) {
     messages.push({
       role: "system",
@@ -399,16 +412,6 @@ function buildTurnMessages(extraInstruction = "") {
   }
 
   recent.forEach(message => messages.push(message));
-  messages.push({
-    role: "system",
-    content: `NEXT NPC TURN: Continue after the user's completed move. Keep the narrative camera on named NPCs and objective environment. End when ${state.scenario.playerName} must respond.`
-  });
-  if (extraInstruction) {
-    messages.push({
-      role: "system",
-      content: extraInstruction
-    });
-  }
   return messages;
 }
 

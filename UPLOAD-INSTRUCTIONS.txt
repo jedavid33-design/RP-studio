@@ -1,4 +1,4 @@
-RP Studio v1.1.1 — WEBSITE FILES
+RP Studio v1.1.2 — WEBSITE FILES
 
 STOP: Upload these files only to the RP Studio GitHub repository.
 Do not upload them to book-ocr-studio. Do not upload the ZIP itself.
@@ -10,7 +10,15 @@ icon-192.png, icon-512.png, and icon-1024.png.
 Choose Replace when GitHub warns that files already exist. After the GitHub
 Pages workflow turns green, fully close and reopen the Home Screen app.
 
-Version 1.1.1 adds:
+Version 1.1.2 adds:
+- A stronger POV firewall that freezes the player character at the end of each
+  user turn, even when the user's own prose is written in second person.
+- All turn and repair instructions now stay in the leading system prompt. This
+  prevents RP models from echoing a trailing NEXT NPC TURN instruction.
+- Expanded Agency Shield checks for player perceptions and footsteps, plus
+  cleanup for any leaked instruction header.
+
+Version 1.1.1 added:
 - A new edge-to-edge opal-glass icon with a translucent milky book-and-quill
   symbol. The folder includes a 1024px master plus the PWA and Apple-touch sizes.
 - An Add OpenRouter credits button when OpenRouter returns an insufficient-credit,
