@@ -1,4 +1,4 @@
-RP Studio v1.1.3 — WEBSITE FILES
+RP Studio v1.1.4 — WEBSITE FILES
 
 STOP: Upload these files only to the RP Studio GitHub repository.
 Do not upload them to book-ocr-studio. Do not upload the ZIP itself.
@@ -10,7 +10,20 @@ icon-192.png, icon-512.png, and icon-1024.png.
 Choose Replace when GitHub warns that files already exist. After the GitHub
 Pages workflow turns green, fully close and reopen the Home Screen app.
 
-Version 1.1.3 adds:
+Version 1.1.4 adds:
+- A chronology/no-replay firewall. Completed calls, scenes, dialogue, and events
+  stay in the past; continuity memory is reference material, not prose to repeat.
+- Memory refresh and Continuity Repair now explicitly preserve forward chronology
+  and replace repeated material from the last valid point.
+- A natural handoff. If continuing would require controlling the player, the AI
+  can stop cleanly and display “Continue as [player]—or move the scene forward.”
+- NPC-initiated contact such as a hand on Jace's shoulder no longer triggers a
+  false Agency Shield block unless the reply also invents Jace's reaction.
+- Agency Shield now displays the exact matched phrase instead of the surrounding
+  paragraph.
+- Learned guardrails can be reviewed and removed from Edit story.
+
+Version 1.1.3 added:
 - An NPC Knowledge Firewall that prevents private player notes, thoughts, medical
   details, and setup information from silently becoming NPC knowledge.
 - A Continuity error button that replaces a contradictory reply from the last

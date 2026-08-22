@@ -121,8 +121,14 @@ The user's prose may use first person, second person, or third person. Never mir
 NPC KNOWLEDGE FIREWALL
 An NPC may know only facts that the transcript or continuity memory establishes the NPC personally witnessed, was told, discovered, or obtained through a specifically established source. Player notes, premise information, narration from the player's perspective, and the player's private thoughts, feelings, motives, medical details, messages, or memories are not automatically known to NPCs. Never convert private setup information into NPC intuition, facial-reading, body-language deduction, convenient surveillance, off-page research, or an invented earlier conversation. If an NPC lacks an established source, preserve that uncertainty and ask or investigate. If the player challenges an NPC's knowledge, do not defend a continuity mistake by fabricating evidence; correct the contradiction unless the existing canon already establishes that the NPC is knowingly lying.
 
+CHRONOLOGY / NO-REPLAY FIREWALL
+Time moves forward from the latest valid turn. Treat every completed scene, phone call, conversation, revelation, action, arrival, departure, and exchange in the transcript or continuity memory as already happened. Never reenact, restart, or reproduce completed dialogue or events, even with paraphrased wording. Earlier events may be referenced briefly only when an NPC has a present reason to recall them. Continuity memory is reference material, not prose to reproduce. A flashback or deliberate repetition is allowed only when the user explicitly requests it. If uncertain whether an event already happened, preserve the current timeline, avoid repeating it, and use the natural handoff rather than replaying canon.
+
 TURN SHAPE
 Advance one meaningful beat through NPC choices or an external event, then hand control back naturally. Do not present a menu of choices. Do not repeat the user's prose. Write polished story prose only—no analysis, labels, instructions, or format tags.
+
+NATURAL HANDOFF
+If the scene has reached a point where no logical NPC action or objective event can continue it without choosing, moving, speaking, perceiving, reacting, or deciding for ${s.playerName}, do not manufacture filler and do not skip time on the player's behalf. Return exactly <handoff>CONTINUE</handoff> and nothing else. Use this only for a genuine player-turn dead end, not merely because the next NPC beat is subtle.
 
 STORY PREMISE
 ${s.premise}
@@ -168,6 +174,10 @@ function cleanStoryReply(raw) {
   const trailingMeta = cleaned.search(/\n\s*\n(?:we must (?:ensure|check|avoid)|self-check:|analysis:)/i);
   if (trailingMeta >= 0) cleaned = cleaned.slice(0, trailingMeta).trim();
   return cleaned;
+}
+
+function isNaturalHandoff(reply) {
+  return /<handoff>\s*CONTINUE\s*<\/handoff>/i.test(String(reply || "").trim());
 }
 
 function narrationWithoutDialogue(reply) {
@@ -218,7 +228,7 @@ function findAgencyViolation(reply) {
   // Only narration and dialogue explicitly attributed to the player are tested.
   const narrationOnly = narrationWithoutDialogue(reply);
   const secondPerson = /\b(?:you|your|yours|yourself|you're|you've|you'll|you'd)\b/i.exec(narrationOnly);
-  if (secondPerson) return { type: "Second-person player narration", excerpt: excerptAround(reply, secondPerson.index, secondPerson[0].length) };
+  if (secondPerson) return { type: "Second-person player narration", excerpt: secondPerson[0] };
 
   const rawNameParts = String(state.scenario.playerName || "")
     .split(/\s+/)
@@ -235,7 +245,7 @@ function findAgencyViolation(reply) {
   const playerAsSubject = new RegExp(`\\b${playerRef}\\b(?:\\s*,[^.!?]{0,45},)?\\s+(?:\\w+ly\\s+)?${playerVerbs}\\b`, "i");
   const subjectMatch = playerAsSubject.exec(narrationOnly);
   if (subjectMatch && !canonAlreadyContains(subjectMatch[0])) {
-    return { type: "New player action, perception, or reaction", excerpt: excerptAround(reply, subjectMatch.index, subjectMatch[0].length) };
+    return { type: "New player action, perception, or reaction", excerpt: subjectMatch[0] };
   }
 
   // Copulas need a complement. This catches "Jace is frightened" or
@@ -245,28 +255,38 @@ function findAgencyViolation(reply) {
   const playerState = new RegExp(`\\b${playerRef}\\b(?:\\s*,[^.!?]{0,45},)?\\s+(?:is|was|becomes?|became|remains?|remained)\\s+(?:not\\s+)?${controlledState}\\b`, "i");
   const stateMatch = playerState.exec(narrationOnly);
   if (stateMatch && !canonAlreadyContains(stateMatch[0])) {
-    return { type: "Player state or feeling assigned by the AI", excerpt: excerptAround(reply, stateMatch.index, stateMatch[0].length) };
+    return { type: "Player state or feeling assigned by the AI", excerpt: stateMatch[0] };
   }
 
-  // Internal state or involuntary body language assigned through a possessive.
-  const controlledPossessive = "(?:eyes?|gaze|hands?|fingers?|breath|heart|pulse|stomach|body|mind|thoughts?|attention|expression|reaction|response|face|voice|grip|feet|footsteps?|knees?|shoulders?|posture|muscles?|skin|cheeks?|lips?|head)";
-  const playerBody = new RegExp(`\\b${playerRef}(?:'s|’s)\\s+${controlledPossessive}\\b`, "i");
-  const bodyMatch = playerBody.exec(narrationOnly);
-  if (bodyMatch && !canonAlreadyContains(bodyMatch[0])) {
-    return { type: "New player body language or internal reaction", excerpt: excerptAround(reply, bodyMatch.index, bodyMatch[0].length) };
+  // Private/internal nouns imply a player reaction even when another character
+  // is grammatically doing the observing. Ordinary contact with a named body
+  // part ("a hand on Jace's shoulder") remains an NPC action and is allowed.
+  const internalPossessive = "(?:mind|thoughts?|attention|reaction|response|expression)";
+  const playerInternal = new RegExp(`\\b${playerRef}(?:'s|’s)\\s+${internalPossessive}\\b`, "i");
+  const internalMatch = playerInternal.exec(narrationOnly);
+  if (internalMatch && !canonAlreadyContains(internalMatch[0])) {
+    return { type: "New player body language or internal reaction", excerpt: internalMatch[0] };
+  }
+
+  const bodyPart = "(?:eyes?|gaze|hands?|fingers?|breath|heart|pulse|stomach|body|face|voice|grip|feet|footsteps?|knees?|shoulders?|posture|muscles?|skin|cheeks?|lips?|head)";
+  const reactionVerb = "(?:trembles?|trembled|shakes?|shook|tightens?|tightened|tenses?|tensed|stiffens?|stiffened|relaxes?|relaxed|shivers?|shivered|flushes?|flushed|blushes?|blushed|pounds?|pounded|races?|raced|catches?|caught|hitches?|hitched|falters?|faltered|narrows?|narrowed|widens?|widened|drops?|dropped|lifts?|lifted|turns?|turned|recoils?|recoiled|leans?|leaned|echo(?:es)?|echoed|betrays?|betrayed|reveals?|revealed|shows?|showed|is|was|becomes?|became)";
+  const playerBodyReaction = new RegExp(`\\b${playerRef}(?:'s|’s)\\s+${bodyPart}\\s+(?:\\w+ly\\s+)?${reactionVerb}\\b`, "i");
+  const bodyReactionMatch = playerBodyReaction.exec(narrationOnly);
+  if (bodyReactionMatch && !canonAlreadyContains(bodyReactionMatch[0])) {
+    return { type: "New player body language or internal reaction", excerpt: bodyReactionMatch[0] };
   }
 
   const imposedEffect = /\b(?:strangely|oddly|unexpectedly|undeniably|impossibly)\s+(?:compelling|attractive|comforting|intoxicating|reassuring|arousing|tempting|thrilling)\b/i.exec(narrationOnly);
   if (imposedEffect) {
-    return { type: "The narration decides how the NPC affects the player", excerpt: excerptAround(reply, imposedEffect.index, imposedEffect[0].length) };
+    return { type: "The narration decides how the NPC affects the player", excerpt: imposedEffect[0] };
   }
 
   // NPC narration that completes physical control of the player rather than
   // merely initiating or offering an action.
-  const forcedContact = "(?:grabs?|seizes?|pulls?|pushes?|drags?|guides?|leads?|moves?|lifts?|carries?|pins?|restrains?|touches?|kisses?|holds?)";
+  const forcedContact = "(?:pulls?|pushes?|drags?|guides?|leads?|moves?|lifts?|carries?|pins?|restrains?)";
   const playerAsControlledObject = new RegExp(`\\b${forcedContact}\\s+(?:${playerRef}|${playerRef}(?:'s|’s)\\s+(?:arm|hand|wrist|waist|face|chin|body))\\b`, "i");
   const contactMatch = playerAsControlledObject.exec(narrationOnly);
-  if (contactMatch) return { type: "NPC physically completes an action for the player", excerpt: excerptAround(reply, contactMatch.index, contactMatch[0].length) };
+  if (contactMatch) return { type: "NPC physically completes an action for the player", excerpt: contactMatch[0] };
   return null;
 }
 
@@ -304,7 +324,11 @@ function render() {
   if (!state.messages.length) {
     appendVisual("system", "Ready", `Story loaded. You control ${state.scenario.playerName}; the AI controls everyone else.\n\nWrite your opening move below.`);
   } else {
-    state.messages.forEach(m => appendVisual(m.role, m.role === "user" ? state.scenario.playerName : "AI", m.content));
+    state.messages.forEach(m => appendVisual(
+      m.role,
+      m.role === "user" ? state.scenario.playerName : m.role === "handoff" ? "Your move" : "AI",
+      m.content
+    ));
   }
   const lastUser = state.messages.map(m => m.role).lastIndexOf("user");
   const lastAssistant = state.messages.map(m => m.role).lastIndexOf("assistant");
@@ -468,7 +492,8 @@ function buildTurnMessages(extraInstruction = "") {
     });
   }
 
-  recent.forEach(message => messages.push(message));
+  recent.filter(message => message.role === "user" || message.role === "assistant")
+    .forEach(message => messages.push(message));
   return messages;
 }
 
@@ -504,6 +529,17 @@ function acceptReply(reply) {
 }
 
 function acceptOrBlock(reply, repeat = false) {
+  if (isNaturalHandoff(reply)) {
+    pendingViolation = null;
+    pendingViolationDetail = null;
+    state.messages.push({
+      role: "handoff",
+      content: `Continue as ${state.scenario.playerName}—or move the scene forward in your next turn.`
+    });
+    save();
+    render();
+    return true;
+  }
   if (findAgencyViolation(reply)) {
     showAgencyBlock(reply, repeat);
     return false;
@@ -522,9 +558,10 @@ async function refreshMemory() {
     return;
   }
 
-  const olderMessages = state.messages.slice(state.memory.through, cutoff);
+  const olderMessages = state.messages.slice(state.memory.through, cutoff)
+    .filter(message => message.role === "user" || message.role === "assistant");
   const transcript = olderMessages.map(m => `${m.role === "user" ? state.scenario.playerName : "NPC / Narrator"}:\n${m.content}`).join("\n\n");
-  const memoryPrompt = `Create a compact continuity memory for an ongoing interactive-fiction role-play. Preserve only established canon needed to continue accurately: setting and current situation, chronology, NPC characterization and goals, relationship development, promises, discoveries, unresolved threads, boundaries, and player-authored facts. Clearly distinguish actions/dialogue the player established from NPC material. Never invent, embellish, moralize, or continue the scene. Use concise bullets and stay under 550 words. Return only one <memory>...</memory> block.\n\nEXISTING MEMORY:\n${state.memory.summary || "None yet."}\n\nNEW TRANSCRIPT TO ABSORB:\n${transcript}`;
+  const memoryPrompt = `Create a compact continuity memory for an ongoing interactive-fiction role-play. Preserve only established canon needed to continue accurately: setting and current situation, chronology, NPC characterization and goals, relationship development, promises, discoveries, unresolved threads, boundaries, and player-authored facts. Clearly distinguish actions/dialogue the player established from NPC material. Mark completed scenes, phone calls, conversations, revelations, and exchanges as completed history; do not reproduce their dialogue or frame them as events that should happen again. This memory is reference-only and must never become new story prose. Never invent, embellish, moralize, or continue the scene. Use concise bullets and stay under 550 words. Return only one <memory>...</memory> block.\n\nEXISTING MEMORY:\n${state.memory.summary || "None yet."}\n\nNEW TRANSCRIPT TO ABSORB:\n${transcript}`;
 
   $("memoryBtn").disabled = true;
   $("memoryBtn").textContent = "Remembering…";
@@ -573,10 +610,13 @@ async function send() {
 async function retry(agencyCorrection = false) {
   const roles = state.messages.map(m => m.role);
   const assistantIdx = roles.lastIndexOf("assistant");
+  const handoffIdx = roles.lastIndexOf("handoff");
   const userIdx = roles.lastIndexOf("user");
   if (userIdx < 0) return;
   if (assistantIdx > userIdx) {
     state.messages.splice(assistantIdx, 1);
+  } else if (handoffIdx > userIdx) {
+    state.messages.splice(handoffIdx, 1);
   }
   save();
   render();
@@ -649,7 +689,7 @@ async function repairContinuity() {
   $("repairContinuityBtn").disabled = true;
   $("repairContinuityBtn").textContent = "Replacing…";
   try {
-    const correction = `CONTINUITY REPAIR: Replace the rejected assistant turn from scratch. The user identified this contradiction: ${note}\n\nREJECTED TURN — evidence only, do not imitate or continue it:\n${rejectedReply}\n\nCorrect the contradiction instead of rationalizing, defending, or preserving it. Do not invent earlier dialogue, facial cues, intuition, surveillance, research, or off-page events to make the mistake seem intentional. Use only established canon and NPC knowledge with an explicit established source. Continue from the user's last valid completed turn.`;
+    const correction = `CONTINUITY REPAIR: Replace the rejected assistant turn from scratch. The user identified this contradiction: ${note}\n\nREJECTED TURN — evidence only, do not imitate or continue it:\n${rejectedReply}\n\nCorrect the contradiction instead of rationalizing, defending, or preserving it. Do not invent earlier dialogue, facial cues, intuition, surveillance, research, or off-page events to make the mistake seem intentional. Do not replay any completed scene, conversation, phone call, dialogue, revelation, or action from the transcript or continuity memory. Continue chronologically after the last valid event, using only established canon and NPC knowledge with an explicit established source. Continue from the user's last valid completed turn.`;
     const reply = await callAI(correction, { temperature: Math.min(Number(state.settings.temperature), 0.55) });
     $("continuityDialog").close();
     acceptOrBlock(reply);
@@ -986,6 +1026,38 @@ function loadScenarioForm() {
     option.value = profile.id;
     option.textContent = profile.name;
     select.appendChild(option);
+  });
+  renderGuardLessons();
+}
+
+function renderGuardLessons() {
+  const list = $("guardLessonList");
+  if (!list) return;
+  list.innerHTML = "";
+  if (!state.guardLessons.length) {
+    const empty = document.createElement("div");
+    empty.className = "library-card-note";
+    empty.textContent = "No learned corrections yet.";
+    list.appendChild(empty);
+    return;
+  }
+  state.guardLessons.forEach((lesson, index) => {
+    const card = document.createElement("div");
+    card.className = "library-card guard-lesson-card";
+    const text = document.createElement("div");
+    text.className = "guard-lesson-text";
+    text.textContent = lesson;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "warning";
+    remove.textContent = "Remove";
+    remove.onclick = () => {
+      state.guardLessons.splice(index, 1);
+      save();
+      renderGuardLessons();
+    };
+    card.append(text, remove);
+    list.appendChild(card);
   });
 }
 

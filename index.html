@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.1.3" />
+  <link rel="stylesheet" href="style.css?v=1.1.4" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -19,7 +19,7 @@
   <div class="app">
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.1.3 · PRIVATE CLOUD SYNC</div>
+        <div class="eyebrow">RP STUDIO · v1.1.4 · PRIVATE CLOUD SYNC</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
@@ -139,11 +139,14 @@
       <label>Premise / contained story<textarea id="premise" rows="7">Olivia and Caleb are rival attorneys at the same firm. After months of professional friction and unresolved attraction, they become trapped together in an elevator during a blackout. The story should unfold as a contained forced-proximity romance with gradual reveals, tension, banter, and a clear forward-moving plot.</textarea></label>
       <label>Writing style<textarea id="styleNotes" rows="5">Write immersive contemporary-romance prose with strong dialogue, chemistry, sensory detail, and natural pacing. Advance the situation without rushing major emotional or romantic beats.</textarea></label>
       <label>Extra boundaries / rules<textarea id="boundaryNotes" rows="5">All characters are adults. Respect consent. Do not decide the player's choices for them.</textarea></label>
+      <h3>Learned guardrails</h3>
+      <div class="hint">Corrections remembered for this story. Remove any lesson that was added because of a false positive.</div>
+      <div id="guardLessonList" class="library-list guard-lesson-list"></div>
       <button id="saveScenarioBtn" class="primary full-width" value="default">Save story</button>
     </form>
   </dialog>
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
-  <script src="app.js?v=1.1.3"></script>
+  <script src="app.js?v=1.1.4"></script>
 </body>
 </html>
