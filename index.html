@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.1.2" />
+  <link rel="stylesheet" href="style.css?v=1.1.3" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -19,7 +19,7 @@
   <div class="app">
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.1.2 · PRIVATE CLOUD SYNC</div>
+        <div class="eyebrow">RP STUDIO · v1.1.3 · PRIVATE CLOUD SYNC</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
@@ -43,6 +43,7 @@
           <div class="retry-actions">
             <button id="retryBtn" class="secondary" disabled>↻ Retry</button>
             <button id="hijackBtn" class="warning" disabled>Hands off Olivia</button>
+            <button id="continuityBtn" class="secondary" disabled>Continuity error</button>
           </div>
           <button id="sendBtn" class="primary">Send <span aria-hidden="true">➜</span></button>
         </div>
@@ -79,11 +80,27 @@
     <div class="panel">
       <div class="panel-head"><div><div class="modal-kicker">Agency shield</div><h2>Reply blocked</h2></div><button class="icon-btn" id="closeAgencyBtn" aria-label="Close">✕</button></div>
       <p class="dialog-copy" id="agencyReason">The reply tried to narrate your character, so it was not added to the story.</p>
+      <div class="shield-trigger" id="agencyTrigger" hidden></div>
+      <label>Why was this wrong? <span class="optional">Optional · remembered for this story</span><textarea id="agencyNote" rows="3" placeholder="Example: Jace had already turned to leave; repeating that action is established canon, not a new action."></textarea></label>
       <details class="blocked-preview"><summary>Preview blocked reply</summary><pre id="blockedReply"></pre></details>
       <div class="shield-actions">
         <button type="button" id="repairAgencyBtn" class="primary">Repair · uses 1 request</button>
+        <button type="button" id="editBlockedBtn" class="secondary">Edit &amp; use · free</button>
         <button type="button" id="showBlockedBtn" class="secondary">Use it anyway</button>
         <button type="button" id="discardBlockedBtn" class="warning">Discard</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="continuityDialog">
+    <div class="panel">
+      <div class="panel-head"><div><div class="modal-kicker">Continuity repair</div><h2>What contradicted the story?</h2></div><button class="icon-btn" id="closeContinuityBtn" aria-label="Close">✕</button></div>
+      <p class="dialog-copy">The current AI reply will be replaced. Describe the mistake in one sentence; the repair must correct it instead of rationalizing it.</p>
+      <label>Continuity error<textarea id="continuityNote" rows="4" placeholder="Example: Matteo has no established way to know about Jace’s insurance issue, and Jace never said it aloud."></textarea></label>
+      <details class="blocked-preview"><summary>Reply being replaced</summary><pre id="continuityReply"></pre></details>
+      <div class="shield-actions">
+        <button type="button" id="repairContinuityBtn" class="primary">Replace reply · uses 1 request</button>
+        <button type="button" id="cancelContinuityBtn" class="secondary">Cancel</button>
       </div>
     </div>
   </dialog>
@@ -127,6 +144,6 @@
   </dialog>
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
-  <script src="app.js?v=1.1.2"></script>
+  <script src="app.js?v=1.1.3"></script>
 </body>
 </html>

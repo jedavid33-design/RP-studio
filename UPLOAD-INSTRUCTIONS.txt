@@ -1,4 +1,4 @@
-RP Studio v1.1.2 — WEBSITE FILES
+RP Studio v1.1.3 — WEBSITE FILES
 
 STOP: Upload these files only to the RP Studio GitHub repository.
 Do not upload them to book-ocr-studio. Do not upload the ZIP itself.
@@ -10,7 +10,18 @@ icon-192.png, icon-512.png, and icon-1024.png.
 Choose Replace when GitHub warns that files already exist. After the GitHub
 Pages workflow turns green, fully close and reopen the Home Screen app.
 
-Version 1.1.2 adds:
+Version 1.1.3 adds:
+- An NPC Knowledge Firewall that prevents private player notes, thoughts, medical
+  details, and setup information from silently becoming NPC knowledge.
+- A Continuity error button that replaces a contradictory reply from the last
+  valid turn and explicitly forbids the model from rationalizing its mistake.
+- Optional user-written correction notes. RP Studio remembers up to twelve
+  story-specific guardrails and includes them in future turns on every device.
+- Agency Shield now shows the exact caught phrase, recognizes more imposed
+  reactions, tolerates exact callbacks to the player's latest established move,
+  and lets you edit a blocked reply for free.
+
+Version 1.1.2 added:
 - A stronger POV firewall that freezes the player character at the end of each
   user turn, even when the user's own prose is written in second person.
 - All turn and repair instructions now stay in the leading system prompt. This

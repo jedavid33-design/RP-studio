@@ -63,7 +63,7 @@ h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(22px, 5vw,
 .primary { background: linear-gradient(135deg, #e3ccff, #a9cfd4); color: #231a2d; box-shadow: 0 7px 22px rgba(158, 123, 203, .22); }
 .secondary { background: rgba(237, 228, 245, .9); border-color: var(--line); }
 .warning { background: rgba(245, 216, 229, .9); border-color: rgba(169, 85, 120, .2); color: #7d3655; }
-.retry-actions { display: flex; gap: 7px; }
+.retry-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .full-width { width: 100%; margin-top: 8px; }
 button:disabled { opacity: .42; cursor: not-allowed; transform: none; }
 dialog { width: min(94vw, 720px); max-height: 90dvh; border: 1px solid var(--line-bright); border-radius: 24px; padding: 0; background: rgba(255, 251, 255, .98); color: var(--text); box-shadow: 0 28px 90px rgba(62,40,76,.3); }
@@ -77,9 +77,12 @@ dialog::backdrop { background: rgba(54, 40, 64, .3); backdrop-filter: blur(8px);
 .panel input:focus, .panel textarea:focus, .panel select:focus { border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(169,139,217,.11); }
 .hint { color: var(--muted); font-size: 12px; line-height: 1.5; padding: 10px 12px; border-radius: 12px; background: rgba(239, 231, 246, .72); }
 .dialog-copy { color: var(--muted); line-height: 1.55; }
+.optional { color: #95869f; font-weight: 500; }
+.shield-trigger { margin: 12px 0; padding: 11px 12px; border: 1px solid rgba(49, 135, 142, .25); border-radius: 12px; background: rgba(216, 239, 240, .5); color: #315f63; white-space: pre-wrap; font-size: 12px; line-height: 1.5; }
 .blocked-preview { margin: 14px 0; padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: rgba(249, 245, 252, .78); }
 .blocked-preview summary { cursor: pointer; color: var(--accent); font-weight: 700; }
 .blocked-preview pre { max-height: 34dvh; overflow: auto; margin: 12px 0 0; white-space: pre-wrap; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; color: var(--text); }
+.blocked-preview pre[contenteditable="true"] { padding: 10px; border: 1px solid var(--accent2); border-radius: 10px; background: white; outline: none; box-shadow: 0 0 0 3px rgba(169,139,217,.11); }
 .shield-actions { display: grid; gap: 8px; margin-top: 14px; }
 .panel h3 { margin: 24px 0 10px; font-family: Georgia, "Times New Roman", serif; font-size: 19px; }
 .library-list { display: grid; gap: 8px; }

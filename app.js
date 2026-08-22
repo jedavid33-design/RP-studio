@@ -25,10 +25,11 @@ const defaults = {
 };
 
 const makeId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-const makeStory = (scenario = defaults.scenario, messages = [], memory = defaults.memory) => ({
+const makeStory = (scenario = defaults.scenario, messages = [], memory = defaults.memory, guardLessons = []) => ({
   scenario: { ...defaults.scenario, ...scenario },
   messages: Array.isArray(messages) ? messages : [],
   memory: { ...defaults.memory, ...memory },
+  guardLessons: Array.isArray(guardLessons) ? [...guardLessons] : [],
   updatedAt: new Date().toISOString()
 });
 
@@ -56,7 +57,9 @@ let state = {
   settings: { ...defaults.settings, ...(JSON.parse(localStorage.getItem("rp.settings") || "{}")) },
   ...storyLibrary.stories[storyLibrary.activeId]
 };
+state.guardLessons = Array.isArray(state.guardLessons) ? state.guardLessons : [];
 let pendingViolation = null;
+let pendingViolationDetail = null;
 const SYNC_STORAGE_KEY = "rp.cloudSync.v1";
 let cloudSync;
 try { cloudSync = JSON.parse(localStorage.getItem(SYNC_STORAGE_KEY) || "null"); } catch { cloudSync = null; }
@@ -81,6 +84,7 @@ function save(options = {}) {
     scenario: state.scenario,
     messages: state.messages,
     memory: state.memory,
+    guardLessons: state.guardLessons,
     updatedAt: now
   };
   storyLibrary.updatedAt = now;
@@ -93,13 +97,16 @@ function activateStory(id) {
   save();
   storyLibrary.activeId = id;
   const story = storyLibrary.stories[id];
-  state = { settings: state.settings, scenario: { ...story.scenario }, messages: [...story.messages], memory: { ...story.memory } };
+  state = { settings: state.settings, scenario: { ...story.scenario }, messages: [...story.messages], memory: { ...story.memory }, guardLessons: Array.isArray(story.guardLessons) ? [...story.guardLessons] : [] };
   save();
   render();
 }
 
 function systemPrompt() {
   const s = state.scenario;
+  const learnedCorrections = state.guardLessons.length
+    ? `\n\nSTORY-SPECIFIC CORRECTIONS LEARNED FROM THE USER\n${state.guardLessons.map(note => `- ${note}`).join("\n")}\nTreat these as binding guardrails. Do not mention them in the prose.`
+    : "";
   return `ROLE CONTRACT
 This is turn-based interactive fiction with a strict division of control.
 - USER role: ${s.playerName}. The user's latest message is completed, immutable canon.
@@ -110,6 +117,9 @@ Continue only with NPC dialogue, NPC behavior, NPC thoughts, and objective event
 
 PLAYER POV FIREWALL
 The user's prose may use first person, second person, or third person. Never mirror the user's player-character POV. In assistant narration, never use "you" or "your" and never use ${s.playerName} (or a pronoun referring to ${s.playerName}) as the subject of a new action, movement, posture, expression, sensation, perception, recognition, thought, feeling, conclusion, or decision. Treat every player action and position in the latest user message as finished and frozen at the handoff: do not extend it, restage it, paraphrase it, or add body language. Start with an NPC or an objective environmental event and write around the player. "You" may appear only inside NPC dialogue addressed to the player.
+
+NPC KNOWLEDGE FIREWALL
+An NPC may know only facts that the transcript or continuity memory establishes the NPC personally witnessed, was told, discovered, or obtained through a specifically established source. Player notes, premise information, narration from the player's perspective, and the player's private thoughts, feelings, motives, medical details, messages, or memories are not automatically known to NPCs. Never convert private setup information into NPC intuition, facial-reading, body-language deduction, convenient surveillance, off-page research, or an invented earlier conversation. If an NPC lacks an established source, preserve that uncertainty and ask or investigate. If the player challenges an NPC's knowledge, do not defend a continuity mistake by fabricating evidence; correct the contradiction unless the existing canon already establishes that the NPC is knowingly lying.
 
 TURN SHAPE
 Advance one meaningful beat through NPC choices or an external event, then hand control back naturally. Do not present a menu of choices. Do not repeat the user's prose. Write polished story prose only—no analysis, labels, instructions, or format tags.
@@ -127,7 +137,14 @@ WRITING STYLE
 ${s.styleNotes}
 
 CONTENT BOUNDARIES
-${s.boundaryNotes}`;
+${s.boundaryNotes}${learnedCorrections}`;
+}
+
+function rememberGuardLesson(note) {
+  const cleaned = String(note || "").replace(/\s+/g, " ").trim().slice(0, 500);
+  if (!cleaned) return;
+  const duplicate = state.guardLessons.some(item => item.toLowerCase() === cleaned.toLowerCase());
+  if (!duplicate) state.guardLessons = [...state.guardLessons, cleaned].slice(-12);
 }
 
 function cleanStoryReply(raw) {
@@ -178,16 +195,35 @@ function narrationWithoutDialogue(reply) {
   return output;
 }
 
-function hasAgencyViolation(reply) {
+function latestUserText() {
+  return [...state.messages].reverse().find(message => message.role === "user")?.content || "";
+}
+
+function canonAlreadyContains(fragment) {
+  const normalize = value => String(value || "").toLowerCase().replace(/[’']/g, "'").replace(/[^a-z0-9']+/g, " ").trim();
+  const candidate = normalize(fragment);
+  const canon = normalize(latestUserText());
+  return candidate.length >= 8 && canon.includes(candidate);
+}
+
+function excerptAround(text, index, length) {
+  const start = Math.max(0, String(text).lastIndexOf("\n", index - 1) + 1);
+  const nextBreak = String(text).indexOf("\n", index + length);
+  const end = nextBreak < 0 ? String(text).length : nextBreak;
+  return String(text).slice(start, end).trim();
+}
+
+function findAgencyViolation(reply) {
   // NPC dialogue may address, challenge, or speculate about the player freely.
   // Only narration and dialogue explicitly attributed to the player are tested.
   const narrationOnly = narrationWithoutDialogue(reply);
-  if (/\b(?:you|your|yours|yourself|you're|you've|you'll|you'd)\b/i.test(narrationOnly)) return true;
+  const secondPerson = /\b(?:you|your|yours|yourself|you're|you've|you'll|you'd)\b/i.exec(narrationOnly);
+  if (secondPerson) return { type: "Second-person player narration", excerpt: excerptAround(reply, secondPerson.index, secondPerson[0].length) };
 
   const rawNameParts = String(state.scenario.playerName || "")
     .split(/\s+/)
     .filter(part => part.length > 1);
-  if (!rawNameParts.length) return false;
+  if (!rawNameParts.length) return null;
   const escapeRegex = text => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const fullName = escapeRegex(rawNameParts.join(" "));
   const nameParts = rawNameParts.map(escapeRegex);
@@ -197,25 +233,45 @@ function hasAgencyViolation(reply) {
   // movement, or state. Harmless object references such as "behind Jace" pass.
   const playerVerbs = "(?:steps?|stepped|moves?|moved|walks?|walked|follows?|followed|nods?|nodded|shakes?|shook|looks?|looked|glances?|glanced|watches?|watched|sees?|saw|hears?|heard|notices?|noticed|recognizes?|recognized|understands?|understood|remembers?|remembered|suspects?|suspected|feels?|felt|thinks?|thought|wonders?|wondered|realizes?|realized|knows?|knew|wants?|wanted|needs?|needed|decides?|decided|chooses?|chose|reaches?|reached|takes?|took|accepts?|accepted|allows?|allowed|lets?|let|leans?|leaned|turns?|turned|pauses?|paused|hesitates?|hesitated|freezes?|froze|smiles?|smiled|frowns?|frowned|laughs?|laughed|breathes?|breathed|sighs?|sighed|gasps?|gasped|replies?|replied|says?|said|asks?|asked|answers?|answered|murmurs?|murmured|whispers?|whispered|speaks?|spoke|opens?|opened|closes?|closed|enters?|entered|leaves?|left|sits?|sat|stands?|stood|waits?|waited|listens?|listened|approaches?|approached|retreats?|retreated|recoils?|recoiled|reacts?|reacted|responds?|responded|stiffens?|stiffened|relaxes?|relaxed|shivers?|shivered|trembles?|trembled|swallows?|swallowed|blushes?|blushed|focuses?|focused|studies?|studied|considers?|considered|finds?|found|drifts?|drifted)";
   const playerAsSubject = new RegExp(`\\b${playerRef}\\b(?:\\s*,[^.!?]{0,45},)?\\s+(?:\\w+ly\\s+)?${playerVerbs}\\b`, "i");
-  if (playerAsSubject.test(narrationOnly)) return true;
+  const subjectMatch = playerAsSubject.exec(narrationOnly);
+  if (subjectMatch && !canonAlreadyContains(subjectMatch[0])) {
+    return { type: "New player action, perception, or reaction", excerpt: excerptAround(reply, subjectMatch.index, subjectMatch[0].length) };
+  }
 
   // Copulas need a complement. This catches "Jace is frightened" or
   // "Jace was walking" without falsely flagging identity clauses such as
   // "He knows exactly who Jace is."
   const controlledState = "(?:afraid|angry|anxious|aware|breathless|calm|confused|curious|dizzy|eager|embarrassed|frightened|frozen|frustrated|glad|happy|hesitant|hurt|nervous|overwhelmed|ready|relieved|sad|scared|shocked|silent|still|stunned|surprised|tense|terrified|tired|uncertain|uneasy|uncomfortable|unwilling|willing|worried|\\w+ing)";
   const playerState = new RegExp(`\\b${playerRef}\\b(?:\\s*,[^.!?]{0,45},)?\\s+(?:is|was|becomes?|became|remains?|remained)\\s+(?:not\\s+)?${controlledState}\\b`, "i");
-  if (playerState.test(narrationOnly)) return true;
+  const stateMatch = playerState.exec(narrationOnly);
+  if (stateMatch && !canonAlreadyContains(stateMatch[0])) {
+    return { type: "Player state or feeling assigned by the AI", excerpt: excerptAround(reply, stateMatch.index, stateMatch[0].length) };
+  }
 
   // Internal state or involuntary body language assigned through a possessive.
-  const controlledPossessive = "(?:eyes?|gaze|hands?|fingers?|breath|heart|pulse|stomach|body|mind|thoughts?|attention|expression|face|voice|grip|feet|footsteps?|knees?|shoulders?|posture|muscles?|skin|cheeks?|lips?|head)";
+  const controlledPossessive = "(?:eyes?|gaze|hands?|fingers?|breath|heart|pulse|stomach|body|mind|thoughts?|attention|expression|reaction|response|face|voice|grip|feet|footsteps?|knees?|shoulders?|posture|muscles?|skin|cheeks?|lips?|head)";
   const playerBody = new RegExp(`\\b${playerRef}(?:'s|’s)\\s+${controlledPossessive}\\b`, "i");
-  if (playerBody.test(narrationOnly)) return true;
+  const bodyMatch = playerBody.exec(narrationOnly);
+  if (bodyMatch && !canonAlreadyContains(bodyMatch[0])) {
+    return { type: "New player body language or internal reaction", excerpt: excerptAround(reply, bodyMatch.index, bodyMatch[0].length) };
+  }
+
+  const imposedEffect = /\b(?:strangely|oddly|unexpectedly|undeniably|impossibly)\s+(?:compelling|attractive|comforting|intoxicating|reassuring|arousing|tempting|thrilling)\b/i.exec(narrationOnly);
+  if (imposedEffect) {
+    return { type: "The narration decides how the NPC affects the player", excerpt: excerptAround(reply, imposedEffect.index, imposedEffect[0].length) };
+  }
 
   // NPC narration that completes physical control of the player rather than
   // merely initiating or offering an action.
   const forcedContact = "(?:grabs?|seizes?|pulls?|pushes?|drags?|guides?|leads?|moves?|lifts?|carries?|pins?|restrains?|touches?|kisses?|holds?)";
   const playerAsControlledObject = new RegExp(`\\b${forcedContact}\\s+(?:${playerRef}|${playerRef}(?:'s|’s)\\s+(?:arm|hand|wrist|waist|face|chin|body))\\b`, "i");
-  return playerAsControlledObject.test(narrationOnly);
+  const contactMatch = playerAsControlledObject.exec(narrationOnly);
+  if (contactMatch) return { type: "NPC physically completes an action for the player", excerpt: excerptAround(reply, contactMatch.index, contactMatch[0].length) };
+  return null;
+}
+
+function hasAgencyViolation(reply) {
+  return Boolean(findAgencyViolation(reply));
 }
 
 function cleanMemoryReply(raw) {
@@ -254,6 +310,7 @@ function render() {
   const lastAssistant = state.messages.map(m => m.role).lastIndexOf("assistant");
   $("retryBtn").disabled = lastUser < 0;
   $("hijackBtn").disabled = lastAssistant < lastUser;
+  $("continuityBtn").disabled = lastAssistant < lastUser;
   chat.scrollTop = chat.scrollHeight;
 }
 
@@ -318,7 +375,7 @@ function createStory(duplicate = false) {
   const id = makeId();
   if (duplicate) {
     const title = `${state.scenario.title} — Copy`;
-    storyLibrary.stories[id] = makeStory({ ...state.scenario, title }, [], defaults.memory);
+    storyLibrary.stories[id] = makeStory({ ...state.scenario, title }, [], defaults.memory, state.guardLessons);
   } else {
     storyLibrary.stories[id] = makeStory({ ...defaults.scenario, title: "New Story" });
   }
@@ -335,7 +392,7 @@ function deleteStory(id) {
   delete storyLibrary.stories[id];
   if (id === storyLibrary.activeId) storyLibrary.activeId = Object.keys(storyLibrary.stories)[0];
   const current = storyLibrary.stories[storyLibrary.activeId];
-  state = { settings: state.settings, scenario: { ...current.scenario }, messages: [...current.messages], memory: { ...current.memory } };
+  state = { settings: state.settings, scenario: { ...current.scenario }, messages: [...current.messages], memory: { ...current.memory }, guardLessons: Array.isArray(current.guardLessons) ? [...current.guardLessons] : [] };
   save(); render(); renderLibrary();
 }
 
@@ -421,7 +478,19 @@ async function callAI(extraInstruction = "", options = {}) {
 
 function showAgencyBlock(reply, repeat = false) {
   pendingViolation = reply;
+  pendingViolationDetail = findAgencyViolation(reply);
   $("blockedReply").textContent = reply;
+  $("blockedReply").contentEditable = "false";
+  $("editBlockedBtn").textContent = "Edit & use · free";
+  $("agencyNote").value = "";
+  const trigger = $("agencyTrigger");
+  if (pendingViolationDetail) {
+    trigger.hidden = false;
+    trigger.textContent = `Caught: ${pendingViolationDetail.type}\n“${pendingViolationDetail.excerpt}”`;
+  } else {
+    trigger.hidden = true;
+    trigger.textContent = "";
+  }
   $("agencyReason").textContent = repeat
     ? "The repaired reply still tried to narrate your character. It remains blocked and has not entered the story."
     : "The reply tried to narrate your character. It was blocked before entering the story or memory.";
@@ -435,7 +504,7 @@ function acceptReply(reply) {
 }
 
 function acceptOrBlock(reply, repeat = false) {
-  if (hasAgencyViolation(reply)) {
+  if (findAgencyViolation(reply)) {
     showAgencyBlock(reply, repeat);
     return false;
   }
@@ -528,16 +597,22 @@ async function retry(agencyCorrection = false) {
     const finalAssistant = finalRoles.lastIndexOf("assistant");
     $("retryBtn").disabled = finalUser < 0;
     $("hijackBtn").disabled = finalAssistant < finalUser;
+    $("continuityBtn").disabled = finalAssistant < finalUser;
   }
 }
 
 async function repairBlockedReply() {
   if (!pendingViolation) return;
+  const userNote = $("agencyNote").value.trim();
+  if (userNote) {
+    rememberGuardLesson(userNote);
+    save();
+  }
   $("repairAgencyBtn").disabled = true;
   $("repairAgencyBtn").textContent = "Repairing…";
   try {
     const reply = await callAI(
-      `REPAIR REQUEST: A draft was blocked for crossing the role boundary. Write a new NPC turn after the user's latest completed move. Use named NPCs and objective environmental events only. Stop before ${state.scenario.playerName} acts, thinks, feels, notices, answers, or decides.`,
+      `REPAIR REQUEST: A draft was blocked for crossing the role boundary. Write a new NPC turn after the user's latest completed move. Use named NPCs and objective environmental events only. Stop before ${state.scenario.playerName} acts, thinks, feels, notices, answers, or decides.${userNote ? ` The user identified this specific problem: ${userNote}` : ""} Do not defend, explain, or preserve the rejected mistake.`,
       { temperature: Math.min(Number(state.settings.temperature), 0.6) }
     );
     if (acceptOrBlock(reply, true)) $("agencyDialog").close();
@@ -548,6 +623,45 @@ async function repairBlockedReply() {
   } finally {
     $("repairAgencyBtn").disabled = false;
     $("repairAgencyBtn").textContent = "Repair · uses 1 request";
+  }
+}
+
+function openContinuityRepair() {
+  const assistantIndex = state.messages.map(message => message.role).lastIndexOf("assistant");
+  const userIndex = state.messages.map(message => message.role).lastIndexOf("user");
+  if (assistantIndex < userIndex) return;
+  $("continuityNote").value = "";
+  $("continuityReply").textContent = state.messages[assistantIndex].content;
+  $("continuityDialog").showModal();
+}
+
+async function repairContinuity() {
+  const note = $("continuityNote").value.trim();
+  if (!note) return alert("Tell RP Studio what contradicted the story first.");
+  const assistantIndex = state.messages.map(message => message.role).lastIndexOf("assistant");
+  const userIndex = state.messages.map(message => message.role).lastIndexOf("user");
+  if (assistantIndex < userIndex) return;
+  const rejectedReply = state.messages[assistantIndex].content;
+  rememberGuardLesson(note);
+  state.messages.splice(assistantIndex, 1);
+  save();
+  render();
+  $("repairContinuityBtn").disabled = true;
+  $("repairContinuityBtn").textContent = "Replacing…";
+  try {
+    const correction = `CONTINUITY REPAIR: Replace the rejected assistant turn from scratch. The user identified this contradiction: ${note}\n\nREJECTED TURN — evidence only, do not imitate or continue it:\n${rejectedReply}\n\nCorrect the contradiction instead of rationalizing, defending, or preserving it. Do not invent earlier dialogue, facial cues, intuition, surveillance, research, or off-page events to make the mistake seem intentional. Use only established canon and NPC knowledge with an explicit established source. Continue from the user's last valid completed turn.`;
+    const reply = await callAI(correction, { temperature: Math.min(Number(state.settings.temperature), 0.55) });
+    $("continuityDialog").close();
+    acceptOrBlock(reply);
+  } catch (error) {
+    state.messages.splice(assistantIndex, 0, { role: "assistant", content: rejectedReply });
+    save();
+    render();
+    $("continuityDialog").close();
+    appendVisual("system", "Continuity repair error", error.message);
+  } finally {
+    $("repairContinuityBtn").disabled = false;
+    $("repairContinuityBtn").textContent = "Replace reply · uses 1 request";
   }
 }
 
@@ -690,7 +804,8 @@ function applyCloudPayload(payload) {
     },
     scenario: { ...defaults.scenario, ...(current.scenario || {}) },
     messages: Array.isArray(current.messages) ? current.messages : [],
-    memory: { ...defaults.memory, ...(current.memory || {}) }
+    memory: { ...defaults.memory, ...(current.memory || {}) },
+    guardLessons: Array.isArray(current.guardLessons) ? current.guardLessons : []
   };
   localStorage.setItem("rp.settings", JSON.stringify(state.settings));
   localStorage.setItem("rp.stories", JSON.stringify(storyLibrary));
@@ -911,7 +1026,8 @@ async function importBackup(file) {
       settings: state.settings,
       scenario: { ...defaults.scenario, ...(current.scenario || {}) },
       messages: Array.isArray(current.messages) ? current.messages : [],
-      memory: { ...defaults.memory, ...(current.memory || {}) }
+      memory: { ...defaults.memory, ...(current.memory || {}) },
+      guardLessons: Array.isArray(current.guardLessons) ? current.guardLessons : []
     };
     save(); render(); renderLibrary(); $("libraryDialog").close();
     alert("Backup imported successfully.");
@@ -928,15 +1044,38 @@ $("editScenarioBtn").onclick = () => { loadScenarioForm(); $("scenarioDialog").s
 $("sendBtn").onclick = send;
 $("retryBtn").onclick = () => retry(false);
 $("hijackBtn").onclick = () => retry(true);
+$("continuityBtn").onclick = openContinuityRepair;
 $("memoryBtn").onclick = refreshMemory;
 $("repairAgencyBtn").onclick = repairBlockedReply;
+$("editBlockedBtn").onclick = () => {
+  const preview = $("blockedReply");
+  if (preview.contentEditable !== "true") {
+    preview.contentEditable = "true";
+    preview.focus();
+    $("editBlockedBtn").textContent = "Use edited reply · free";
+    return;
+  }
+  const edited = preview.textContent.trim();
+  if (!edited) return alert("The edited reply is empty.");
+  if (acceptOrBlock(edited, true)) $("agencyDialog").close();
+};
 $("showBlockedBtn").onclick = () => {
   if (pendingViolation) acceptReply(pendingViolation);
   pendingViolation = null;
   $("agencyDialog").close();
 };
-$("discardBlockedBtn").onclick = () => { pendingViolation = null; $("agencyDialog").close(); render(); };
+$("discardBlockedBtn").onclick = () => {
+  const note = $("agencyNote").value.trim();
+  if (note) { rememberGuardLesson(note); save(); }
+  pendingViolation = null;
+  pendingViolationDetail = null;
+  $("agencyDialog").close();
+  render();
+};
 $("closeAgencyBtn").onclick = () => { $("agencyDialog").close(); };
+$("repairContinuityBtn").onclick = repairContinuity;
+$("closeContinuityBtn").onclick = () => $("continuityDialog").close();
+$("cancelContinuityBtn").onclick = () => $("continuityDialog").close();
 $("newStoryBtn").onclick = () => createStory(false);
 $("duplicateStoryBtn").onclick = () => createStory(true);
 $("exportBtn").onclick = exportBackup;
@@ -1013,7 +1152,7 @@ $("saveScenarioBtn").onclick = (e) => {
 };
 
 $("clearBtn").onclick = () => {
-  if (confirm("Start a new session? This clears the current conversation but keeps your story setup.")) {
+  if (confirm("Start a new session? This clears the current conversation and memory, but keeps your story setup and learned guardrails.")) {
     state.messages = [];
     state.memory = { ...defaults.memory };
     save();
