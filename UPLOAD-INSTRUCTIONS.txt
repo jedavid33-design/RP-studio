@@ -1,4 +1,4 @@
-RP Studio v1.1.4 — WEBSITE FILES
+RP Studio v1.2.0 — WEBSITE FILES
 
 STOP: Upload these files only to the RP Studio GitHub repository.
 Do not upload them to book-ocr-studio. Do not upload the ZIP itself.
@@ -10,7 +10,39 @@ icon-192.png, icon-512.png, and icon-1024.png.
 Choose Replace when GitHub warns that files already exist. After the GitHub
 Pages workflow turns green, fully close and reopen the Home Screen app.
 
-Version 1.1.4 adds:
+Version 1.2.0 adds (reliability + safety fixes from the 2026-10-01 audit):
+- Corrupt saved data can no longer white-screen the app. Every saved-data read
+  at startup is guarded; on corruption the app boots into a recovery banner
+  with Export still reachable, and the damaged copy is preserved in the
+  browser's storage under a "corrupt" backup key instead of being overwritten.
+- A real in-flight turn lock: the keyboard shortcut, Send, Retry, Hands-off,
+  Continuity, Refresh memory, and both repair buttons are all locked while a
+  turn is generating, so concurrent generations can no longer interleave the
+  transcript or burn extra API calls.
+- Cloud sync no longer silently drops edits saved during an upload: the push
+  stamps from a pre-upload snapshot and automatically re-pushes anything saved
+  mid-flight.
+- Trash: deleting a story, clearing a session, or removing a profile now moves
+  it to a Trash section (Restore / Delete forever) instead of destroying it
+  immediately. Trash syncs between devices.
+- Storage-full no longer kills the app silently: failed saves show a persistent
+  banner with an Export button, and the app keeps working.
+- Sync conflicts: after declining the cloud copy you are now offered an
+  explicit "upload my copy as the newest version" choice instead of a dead end.
+- Connecting a sync code now downloads a dated safety backup of the local
+  library before replacing it.
+- "Duplicate current" now truly duplicates the story, transcript included.
+- A blocked reply can no longer leak into a different story after switching.
+- Empty cloud copies are rejected with a clean error instead of crashing sync.
+- Empty model replies are treated as errors (nothing saved) instead of blank
+  story cards.
+- "Use as player" now asks for confirmation, and character profiles can be
+  edited (not just deleted and recreated).
+- A visible warning when the 12-guardrail cap drops the oldest lesson, and a
+  note in Settings that the Worker URL and app password are stored as plain
+  text in the browser.
+
+Version 1.1.4 added:
 - A chronology/no-replay firewall. Completed calls, scenes, dialogue, and events
   stay in the past; continuity memory is reference material, not prose to repeat.
 - Memory refresh and Continuity Repair now explicitly preserve forward chronology

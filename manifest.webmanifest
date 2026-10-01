@@ -2,7 +2,7 @@
   "name": "Story RP Studio",
   "short_name": "RP Studio",
   "description": "A private, encrypted and synchronized interactive fiction studio.",
-  "start_url": "./?v=1.1.4",
+  "start_url": "./?v=1.2.0",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f8f4fb",

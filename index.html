@@ -11,15 +11,29 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.1.4" />
+  <link rel="stylesheet" href="style.css?v=1.2.0" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
   <div class="ambient ambient-two"></div>
   <div class="app">
+    <div id="recoveryBanner" class="banner banner-warning" hidden>
+      <span id="recoveryBannerText"></span>
+      <span class="banner-actions">
+        <button type="button" id="recoveryExportBtn" class="secondary">Export backup</button>
+        <button type="button" id="recoveryDismissBtn" class="text-btn">Dismiss</button>
+      </span>
+    </div>
+    <div id="storageBanner" class="banner banner-error" hidden>
+      <span>Storage is full — recent changes may not be saved locally. <strong>Export a backup now</strong>, then free space (delete old stories or refresh memory).</span>
+      <span class="banner-actions">
+        <button type="button" id="storageExportBtn" class="secondary">Export backup</button>
+        <button type="button" id="storageDismissBtn" class="text-btn">Dismiss</button>
+      </span>
+    </div>
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.1.4 · PRIVATE CLOUD SYNC</div>
+        <div class="eyebrow">RP STUDIO · v1.2.0 · PRIVATE CLOUD SYNC</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
@@ -61,6 +75,7 @@
       <label>Temperature<input id="temperature" type="number" min="0" max="2" step="0.1" value="0.9" /></label>
       <label>Max reply tokens<input id="maxTokens" type="number" min="100" max="4000" step="100" value="900" /></label>
       <button id="saveSettingsBtn" class="primary full-width" value="default">Save connection</button>
+      <div class="hint">The Worker URL and app password are stored in this browser's local storage as plain text. Anyone with access to this browser's site data can read them.</div>
       <h3>Private cloud sync</h3>
       <div class="hint">Syncs stories, transcripts, memories, profiles, and model preferences between your devices. Everything is encrypted in this browser before it reaches your Worker. Enter the same Worker URL, app password, and sync code on each device.</div>
       <label>Sync code<input id="syncCode" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Create one here or paste it from your other device" /></label>
@@ -118,6 +133,9 @@
       <label>Profile name<input id="profileName" placeholder="Olivia" /></label>
       <label>Character notes<textarea id="profileNotes" rows="4" placeholder="Appearance, personality, history, boundaries…"></textarea></label>
       <button type="button" id="saveProfileBtn" class="secondary full-width">Save new profile</button>
+      <h3>Trash</h3>
+      <div class="hint">Deleted stories, cleared sessions, and removed profiles wait here until you delete them forever. Trash syncs between your devices like everything else.</div>
+      <div id="trashList" class="library-list"></div>
       <h3>Portable backup</h3>
       <div class="hint">Exports every story, transcript, memory, and character profile. Connection details and passwords are never included.</div>
       <div class="library-actions">
@@ -140,13 +158,13 @@
       <label>Writing style<textarea id="styleNotes" rows="5">Write immersive contemporary-romance prose with strong dialogue, chemistry, sensory detail, and natural pacing. Advance the situation without rushing major emotional or romantic beats.</textarea></label>
       <label>Extra boundaries / rules<textarea id="boundaryNotes" rows="5">All characters are adults. Respect consent. Do not decide the player's choices for them.</textarea></label>
       <h3>Learned guardrails</h3>
-      <div class="hint">Corrections remembered for this story. Remove any lesson that was added because of a false positive.</div>
+      <div class="hint">Corrections remembered for this story (up to 12 — the oldest is dropped when full). Remove any lesson that was added because of a false positive.</div>
       <div id="guardLessonList" class="library-list guard-lesson-list"></div>
       <button id="saveScenarioBtn" class="primary full-width" value="default">Save story</button>
     </form>
   </dialog>
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
-  <script src="app.js?v=1.1.4"></script>
+  <script src="app.js?v=1.2.0"></script>
 </body>
 </html>

@@ -33,8 +33,40 @@ const makeStory = (scenario = defaults.scenario, messages = [], memory = default
   updatedAt: new Date().toISOString()
 });
 
-let storyLibrary;
-try { storyLibrary = JSON.parse(localStorage.getItem("rp.stories") || "null"); } catch { storyLibrary = null; }
+// Every boot-time localStorage read goes through safeParse. A single corrupt
+// byte must never white-screen the app or trap stories inside it: corrupt keys
+// fall back to defaults, the raw bytes are preserved under a
+// "<key>.corrupt-<timestamp>" backup on first save, and a recovery banner keeps
+// Export reachable.
+const bootCorrupt = { keys: [], raw: {} };
+function safeParse(key, fallback) {
+  let raw = null;
+  try { raw = localStorage.getItem(key); } catch { return fallback; }
+  if (raw === null || raw === undefined) return fallback;
+  try {
+    const value = JSON.parse(raw);
+    return value === null || value === undefined ? fallback : value;
+  } catch {
+    if (!bootCorrupt.keys.includes(key)) {
+      bootCorrupt.keys.push(key);
+      bootCorrupt.raw[key] = raw;
+    }
+    return fallback;
+  }
+}
+
+function normalizeTrash(trash) {
+  const t = (trash && typeof trash === "object") ? trash : {};
+  return {
+    sessions: Array.isArray(t.sessions) ? t.sessions : [],
+    profiles: Array.isArray(t.profiles) ? t.profiles : []
+  };
+}
+
+const isLiveStory = story => Boolean(story) && !story.deletedAt;
+const liveStoryIds = () => Object.keys(storyLibrary.stories || {}).filter(id => isLiveStory(storyLibrary.stories[id]));
+
+let storyLibrary = safeParse("rp.stories", null);
 if (!storyLibrary || !storyLibrary.stories || !Object.keys(storyLibrary.stories).length) {
   const migratedId = makeId();
   storyLibrary = {
@@ -42,43 +74,94 @@ if (!storyLibrary || !storyLibrary.stories || !Object.keys(storyLibrary.stories)
     activeId: migratedId,
     stories: {
       [migratedId]: makeStory(
-        JSON.parse(localStorage.getItem("rp.scenario") || "{}"),
-        JSON.parse(localStorage.getItem("rp.messages") || "[]"),
-        JSON.parse(localStorage.getItem("rp.memory") || "{}")
+        safeParse("rp.scenario", {}),
+        safeParse("rp.messages", []),
+        safeParse("rp.memory", {})
       )
     },
-    profiles: []
+    profiles: [],
+    trash: { sessions: [], profiles: [] }
   };
 }
 storyLibrary.profiles = Array.isArray(storyLibrary.profiles) ? storyLibrary.profiles : [];
-if (!storyLibrary.stories[storyLibrary.activeId]) storyLibrary.activeId = Object.keys(storyLibrary.stories)[0];
+storyLibrary.trash = normalizeTrash(storyLibrary.trash);
+if (!isLiveStory(storyLibrary.stories[storyLibrary.activeId])) {
+  storyLibrary.activeId = liveStoryIds()[0];
+}
+if (!storyLibrary.activeId) {
+  // Every story is tombstoned (can't happen via the UI, but a damaged cloud
+  // copy could). Never strand the app without a live story.
+  const freshId = makeId();
+  storyLibrary.stories[freshId] = makeStory({ ...defaults.scenario, title: "New Story" });
+  storyLibrary.activeId = freshId;
+}
 
 let state = {
-  settings: { ...defaults.settings, ...(JSON.parse(localStorage.getItem("rp.settings") || "{}")) },
+  settings: { ...defaults.settings, ...safeParse("rp.settings", {}) },
   ...storyLibrary.stories[storyLibrary.activeId]
 };
 state.guardLessons = Array.isArray(state.guardLessons) ? state.guardLessons : [];
 let pendingViolation = null;
 let pendingViolationDetail = null;
+function clearPendingViolation() {
+  pendingViolation = null;
+  pendingViolationDetail = null;
+}
 const SYNC_STORAGE_KEY = "rp.cloudSync.v1";
-let cloudSync;
-try { cloudSync = JSON.parse(localStorage.getItem(SYNC_STORAGE_KEY) || "null"); } catch { cloudSync = null; }
+let cloudSync = safeParse(SYNC_STORAGE_KEY, null);
 cloudSync = {
   enabled: false,
   code: "",
   revision: 0,
   lastSyncedAt: "",
   autoSync: true,
-  ...(cloudSync || {})
+  ...((cloudSync && typeof cloudSync === "object") ? cloudSync : {})
 };
 const syncRuntime = { ready: false, busy: false, timer: null };
+let turnInFlight = false;
+let editingProfileId = null;
 storyLibrary.updatedAt = storyLibrary.updatedAt || Object.values(storyLibrary.stories)
   .map(story => story.updatedAt || "")
   .sort()
   .at(-1) || new Date().toISOString();
 
+const FRIENDLY_KEY_NAMES = {
+  "rp.stories": "stories",
+  "rp.settings": "settings",
+  "rp.scenario": "old scenario",
+  "rp.messages": "old messages",
+  "rp.memory": "old memory",
+  "rp.cloudSync.v1": "sync connection"
+};
+
+// Preserve the raw bytes of any corrupt boot key exactly once, so a damaged
+// copy can still be recovered after the app keeps working on fallbacks.
+function preserveCorruptBootKeys() {
+  if (!bootCorrupt.keys.length) return;
+  const stamp = new Date().toISOString().replace(/[^0-9]/g, "");
+  bootCorrupt.keys.forEach(key => {
+    try { localStorage.setItem(`${key}.corrupt-${stamp}`, bootCorrupt.raw[key]); } catch { /* best effort */ }
+  });
+  bootCorrupt.keys.length = 0;
+}
+
+function showRecoveryBanner() {
+  const banner = $("recoveryBanner");
+  if (!banner) return;
+  const names = bootCorrupt.keys.map(key => FRIENDLY_KEY_NAMES[key] || key).join(", ");
+  $("recoveryBannerText").textContent =
+    `Some saved data couldn't be read (${names}) and was reset to defaults. ` +
+    `The damaged copy was preserved in this browser's storage — export a backup now, and don't clear site storage.`;
+  banner.hidden = false;
+}
+
+function showStorageBanner() {
+  const banner = $("storageBanner");
+  if (banner) banner.hidden = false;
+}
+
 function save(options = {}) {
-  localStorage.setItem("rp.settings", JSON.stringify(state.settings));
+  preserveCorruptBootKeys();
   const now = new Date().toISOString();
   storyLibrary.stories[storyLibrary.activeId] = {
     scenario: state.scenario,
@@ -88,12 +171,23 @@ function save(options = {}) {
     updatedAt: now
   };
   storyLibrary.updatedAt = now;
-  localStorage.setItem("rp.stories", JSON.stringify(storyLibrary));
+  try {
+    localStorage.setItem("rp.settings", JSON.stringify(state.settings));
+    localStorage.setItem("rp.stories", JSON.stringify(storyLibrary));
+  } catch (error) {
+    // QuotaExceededError (iOS Safari ~5MB cap) or any other write failure. The
+    // in-memory state is intact and the UI keeps working; the scheduled cloud
+    // push below can still rescue the newest data. Never let a failed write
+    // silently kill the app.
+    console.warn("RP Studio: local save failed:", error);
+    showStorageBanner();
+  }
   if (!options.skipSync) scheduleCloudPush();
 }
 
 function activateStory(id) {
-  if (!storyLibrary.stories[id]) return;
+  if (!isLiveStory(storyLibrary.stories[id])) return;
+  clearPendingViolation();
   save();
   storyLibrary.activeId = id;
   const story = storyLibrary.stories[id];
@@ -146,11 +240,18 @@ CONTENT BOUNDARIES
 ${s.boundaryNotes}${learnedCorrections}`;
 }
 
+const MAX_GUARD_LESSONS = 12;
 function rememberGuardLesson(note) {
   const cleaned = String(note || "").replace(/\s+/g, " ").trim().slice(0, 500);
   if (!cleaned) return;
   const duplicate = state.guardLessons.some(item => item.toLowerCase() === cleaned.toLowerCase());
-  if (!duplicate) state.guardLessons = [...state.guardLessons, cleaned].slice(-12);
+  if (duplicate) return;
+  const wasFull = state.guardLessons.length >= MAX_GUARD_LESSONS;
+  state.guardLessons = [...state.guardLessons, cleaned].slice(-MAX_GUARD_LESSONS);
+  if (wasFull) {
+    appendVisual("system", "Guardrails full", `This story already had ${MAX_GUARD_LESSONS} learned guardrails, so the oldest one was dropped to make room. Remove outdated lessons under ✦ Edit story → Learned guardrails.`);
+    $("chat").scrollTop = $("chat").scrollHeight;
+  }
 }
 
 function cleanStoryReply(raw) {
@@ -332,9 +433,9 @@ function render() {
   }
   const lastUser = state.messages.map(m => m.role).lastIndexOf("user");
   const lastAssistant = state.messages.map(m => m.role).lastIndexOf("assistant");
-  $("retryBtn").disabled = lastUser < 0;
-  $("hijackBtn").disabled = lastAssistant < lastUser;
-  $("continuityBtn").disabled = lastAssistant < lastUser;
+  $("retryBtn").disabled = turnInFlight || lastUser < 0;
+  $("hijackBtn").disabled = turnInFlight || lastAssistant < lastUser;
+  $("continuityBtn").disabled = turnInFlight || lastAssistant < lastUser;
   chat.scrollTop = chat.scrollHeight;
 }
 
@@ -342,6 +443,7 @@ function renderLibrary() {
   const storyList = $("storyList");
   storyList.innerHTML = "";
   Object.entries(storyLibrary.stories)
+    .filter(([, story]) => isLiveStory(story))
     .sort((a, b) => String(b[1].updatedAt).localeCompare(String(a[1].updatedAt)))
     .forEach(([id, story]) => {
       const card = document.createElement("div");
@@ -363,7 +465,7 @@ function renderLibrary() {
         open.onclick = () => { activateStory(id); renderLibrary(); };
         actions.appendChild(open);
       }
-      if (Object.keys(storyLibrary.stories).length > 1) {
+      if (liveStoryIds().length > 1) {
         const remove = document.createElement("button");
         remove.type = "button"; remove.className = "warning"; remove.textContent = "Delete";
         remove.onclick = () => deleteStory(id);
@@ -385,13 +487,150 @@ function renderLibrary() {
     main.append(title, note);
     const actions = document.createElement("div"); actions.className = "library-card-actions";
     const player = document.createElement("button"); player.type = "button"; player.className = "secondary"; player.textContent = "Use as player";
-    player.onclick = () => { state.scenario.playerName = profile.name; state.scenario.playerNotes = profile.notes; save(); render(); $("libraryDialog").close(); };
+    player.onclick = () => {
+      if (!confirm(`Use “${profile.name}” as your player? This replaces the current player name and notes for “${state.scenario.title || "this story"}”.`)) return;
+      state.scenario.playerName = profile.name; state.scenario.playerNotes = profile.notes; save(); render(); $("libraryDialog").close();
+    };
+    const edit = document.createElement("button"); edit.type = "button"; edit.className = "secondary"; edit.textContent = "Edit";
+    edit.onclick = () => {
+      editingProfileId = profile.id;
+      $("profileName").value = profile.name;
+      $("profileNotes").value = profile.notes;
+      $("saveProfileBtn").textContent = "Save profile changes";
+      $("profileName").focus();
+    };
     const npc = document.createElement("button"); npc.type = "button"; npc.className = "secondary"; npc.textContent = "Add as NPC";
     npc.onclick = () => { state.scenario.npcNotes = [state.scenario.npcNotes, `${profile.name} — ${profile.notes}`].filter(Boolean).join("\n\n"); save(); $("libraryDialog").close(); };
     const remove = document.createElement("button"); remove.type = "button"; remove.className = "warning"; remove.textContent = "Delete";
-    remove.onclick = () => { if (confirm(`Delete the ${profile.name} profile?`)) { storyLibrary.profiles = storyLibrary.profiles.filter(p => p.id !== profile.id); save(); renderLibrary(); } };
-    actions.append(player, npc, remove); card.append(main, actions); profileList.appendChild(card);
+    remove.onclick = () => {
+      if (!confirm(`Move the “${profile.name}” profile to Trash? You can restore it from there.`)) return;
+      storyLibrary.trash.profiles.push({ trashId: makeId(), profile: { ...profile }, deletedAt: new Date().toISOString() });
+      storyLibrary.profiles = storyLibrary.profiles.filter(p => p.id !== profile.id);
+      if (editingProfileId === profile.id) {
+        editingProfileId = null;
+        $("saveProfileBtn").textContent = "Save new profile";
+        $("profileName").value = ""; $("profileNotes").value = "";
+      }
+      save(); renderLibrary();
+    };
+    actions.append(player, edit, npc, remove); card.append(main, actions); profileList.appendChild(card);
   });
+  renderTrash();
+}
+
+function formatTrashDate(iso) {
+  const date = new Date(iso);
+  if (isNaN(date)) return "";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " +
+    date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function renderTrash() {
+  const list = $("trashList");
+  if (!list) return;
+  list.innerHTML = "";
+  const trashedStories = Object.entries(storyLibrary.stories)
+    .filter(([, story]) => !isLiveStory(story))
+    .sort((a, b) => String(b[1].deletedAt || "").localeCompare(String(a[1].deletedAt || "")));
+  const trashedSessions = [...storyLibrary.trash.sessions]
+    .sort((a, b) => String(b.clearedAt || "").localeCompare(String(a.clearedAt || "")));
+  const trashedProfiles = [...storyLibrary.trash.profiles]
+    .sort((a, b) => String(b.deletedAt || "").localeCompare(String(a.deletedAt || "")));
+  if (!trashedStories.length && !trashedSessions.length && !trashedProfiles.length) {
+    list.textContent = "Trash is empty.";
+    return;
+  }
+  const addCard = (title, note, restoreLabel, onRestore, onDeleteForever) => {
+    const card = document.createElement("div");
+    card.className = "library-card trash-card";
+    const main = document.createElement("div");
+    main.className = "library-card-main";
+    const titleEl = document.createElement("div"); titleEl.className = "library-card-title"; titleEl.textContent = title;
+    const noteEl = document.createElement("div"); noteEl.className = "library-card-note"; noteEl.textContent = note;
+    main.append(titleEl, noteEl);
+    const actions = document.createElement("div"); actions.className = "library-card-actions";
+    const restore = document.createElement("button"); restore.type = "button"; restore.className = "secondary"; restore.textContent = restoreLabel;
+    restore.onclick = onRestore;
+    const del = document.createElement("button"); del.type = "button"; del.className = "warning"; del.textContent = "Delete forever";
+    del.onclick = onDeleteForever;
+    actions.append(restore, del);
+    card.append(main, actions);
+    list.appendChild(card);
+  };
+  trashedStories.forEach(([id, story]) => addCard(
+    story.scenario?.title || "Untitled Story",
+    `Story · ${(story.messages || []).length} messages · deleted ${formatTrashDate(story.deletedAt)}`,
+    "Restore",
+    () => restoreStory(id),
+    () => permanentlyDeleteStory(id)
+  ));
+  trashedSessions.forEach(entry => addCard(
+    entry.title || "Untitled Story",
+    `Cleared session · ${(entry.messages || []).length} messages · ${formatTrashDate(entry.clearedAt)}`,
+    "Restore transcript",
+    () => restoreSession(entry.trashId),
+    () => permanentlyDeleteSession(entry.trashId)
+  ));
+  trashedProfiles.forEach(entry => addCard(
+    entry.profile?.name || "Unnamed profile",
+    `Profile · deleted ${formatTrashDate(entry.deletedAt)}`,
+    "Restore",
+    () => restoreProfile(entry.trashId),
+    () => permanentlyDeleteProfile(entry.trashId)
+  ));
+}
+
+function restoreSession(trashId) {
+  const index = storyLibrary.trash.sessions.findIndex(entry => entry.trashId === trashId);
+  if (index < 0) return;
+  const entry = storyLibrary.trash.sessions[index];
+  const targetId = isLiveStory(storyLibrary.stories[entry.storyId]) ? entry.storyId : null;
+  if (targetId && (storyLibrary.stories[targetId].messages || []).length &&
+      !confirm(`Restore this transcript into “${entry.title}”? It will replace the story's current messages.`)) return;
+  if (targetId) {
+    storyLibrary.stories[targetId].messages = (entry.messages || []).map(message => ({ ...message }));
+    storyLibrary.stories[targetId].memory = { ...(entry.memory || {}) };
+    storyLibrary.stories[targetId].updatedAt = new Date().toISOString();
+    if (targetId === storyLibrary.activeId) {
+      state.messages = storyLibrary.stories[targetId].messages.map(message => ({ ...message }));
+      state.memory = { ...storyLibrary.stories[targetId].memory };
+      render();
+    }
+  } else {
+    const id = makeId();
+    storyLibrary.stories[id] = makeStory(
+      { ...defaults.scenario, title: `${entry.title || "Untitled Story"} (restored)` },
+      (entry.messages || []).map(message => ({ ...message })),
+      { ...(entry.memory || {}) },
+      []
+    );
+    activateStory(id);
+  }
+  storyLibrary.trash.sessions.splice(index, 1);
+  save(); renderLibrary();
+}
+
+function permanentlyDeleteSession(trashId) {
+  if (!confirm("Delete this cleared transcript FOREVER? It cannot be recovered after this.")) return;
+  storyLibrary.trash.sessions = storyLibrary.trash.sessions.filter(entry => entry.trashId !== trashId);
+  save(); renderLibrary();
+}
+
+function restoreProfile(trashId) {
+  const index = storyLibrary.trash.profiles.findIndex(entry => entry.trashId === trashId);
+  if (index < 0) return;
+  const entry = storyLibrary.trash.profiles[index];
+  const profile = { ...entry.profile };
+  if (storyLibrary.profiles.some(p => p.id === profile.id)) profile.id = makeId();
+  storyLibrary.profiles.push(profile);
+  storyLibrary.trash.profiles.splice(index, 1);
+  save(); renderLibrary();
+}
+
+function permanentlyDeleteProfile(trashId) {
+  if (!confirm("Delete this profile FOREVER? It cannot be recovered after this.")) return;
+  storyLibrary.trash.profiles = storyLibrary.trash.profiles.filter(entry => entry.trashId !== trashId);
+  save(); renderLibrary();
 }
 
 function createStory(duplicate = false) {
@@ -399,7 +638,12 @@ function createStory(duplicate = false) {
   const id = makeId();
   if (duplicate) {
     const title = `${state.scenario.title} — Copy`;
-    storyLibrary.stories[id] = makeStory({ ...state.scenario, title }, [], defaults.memory, state.guardLessons);
+    storyLibrary.stories[id] = makeStory(
+      { ...state.scenario, title },
+      state.messages.map(message => ({ ...message })),
+      { ...state.memory },
+      state.guardLessons
+    );
   } else {
     storyLibrary.stories[id] = makeStory({ ...defaults.scenario, title: "New Story" });
   }
@@ -411,13 +655,35 @@ function createStory(duplicate = false) {
 }
 
 function deleteStory(id) {
-  const title = storyLibrary.stories[id]?.scenario?.title || "this story";
-  if (!confirm(`Delete “${title}” and its entire transcript?`)) return;
-  delete storyLibrary.stories[id];
-  if (id === storyLibrary.activeId) storyLibrary.activeId = Object.keys(storyLibrary.stories)[0];
-  const current = storyLibrary.stories[storyLibrary.activeId];
-  state = { settings: state.settings, scenario: { ...current.scenario }, messages: [...current.messages], memory: { ...current.memory }, guardLessons: Array.isArray(current.guardLessons) ? [...current.guardLessons] : [] };
+  const story = storyLibrary.stories[id];
+  if (!story) return;
+  const title = story.scenario?.title || "this story";
+  if (!confirm(`Move “${title}” to Trash? Its transcript stays recoverable until you delete it forever.`)) return;
+  clearPendingViolation();
+  story.deletedAt = new Date().toISOString();
+  if (id === storyLibrary.activeId) {
+    const nextId = liveStoryIds().find(candidate => candidate !== id);
+    if (!nextId) { delete story.deletedAt; return; } // UI blocks this; stay safe anyway
+    storyLibrary.activeId = nextId;
+    const current = storyLibrary.stories[nextId];
+    state = { settings: state.settings, scenario: { ...current.scenario }, messages: [...current.messages], memory: { ...current.memory }, guardLessons: Array.isArray(current.guardLessons) ? [...current.guardLessons] : [] };
+  }
   save(); render(); renderLibrary();
+}
+
+function restoreStory(id) {
+  const story = storyLibrary.stories[id];
+  if (!story?.deletedAt) return;
+  delete story.deletedAt;
+  story.updatedAt = new Date().toISOString();
+  save(); renderLibrary();
+}
+
+function permanentlyDeleteStory(id) {
+  const title = storyLibrary.stories[id]?.scenario?.title || "this story";
+  if (!confirm(`Delete “${title}” FOREVER? Its transcript cannot be recovered after this.`)) return;
+  delete storyLibrary.stories[id];
+  save(); renderLibrary();
 }
 
 function isOpenRouterCreditError(message) {
@@ -529,6 +795,15 @@ function acceptReply(reply) {
 }
 
 function acceptOrBlock(reply, repeat = false) {
+  if (!String(reply || "").trim()) {
+    // An empty completion (or a reply made only of stripped tags) must never
+    // become a blank story card. Treat it like a generation error instead:
+    // nothing is saved, and the user can retry the turn.
+    appendVisual("system", "Empty reply", "The model returned an empty reply, so nothing was added to the story. Retry the turn to try again.");
+    $("chat").scrollTop = $("chat").scrollHeight;
+    render();
+    return false;
+  }
   if (isNaturalHandoff(reply)) {
     pendingViolation = null;
     pendingViolationDetail = null;
@@ -563,7 +838,8 @@ async function refreshMemory() {
   const transcript = olderMessages.map(m => `${m.role === "user" ? state.scenario.playerName : "NPC / Narrator"}:\n${m.content}`).join("\n\n");
   const memoryPrompt = `Create a compact continuity memory for an ongoing interactive-fiction role-play. Preserve only established canon needed to continue accurately: setting and current situation, chronology, NPC characterization and goals, relationship development, promises, discoveries, unresolved threads, boundaries, and player-authored facts. Clearly distinguish actions/dialogue the player established from NPC material. Mark completed scenes, phone calls, conversations, revelations, and exchanges as completed history; do not reproduce their dialogue or frame them as events that should happen again. This memory is reference-only and must never become new story prose. Never invent, embellish, moralize, or continue the scene. Use concise bullets and stay under 550 words. Return only one <memory>...</memory> block.\n\nEXISTING MEMORY:\n${state.memory.summary || "None yet."}\n\nNEW TRANSCRIPT TO ABSORB:\n${transcript}`;
 
-  $("memoryBtn").disabled = true;
+  if (turnInFlight) return;
+  setTurnInFlight(true);
   $("memoryBtn").textContent = "Remembering…";
   try {
     const raw = await requestAI([
@@ -580,34 +856,49 @@ async function refreshMemory() {
   } catch (err) {
     appendVisual("system", "Memory error", err.message);
   } finally {
-    $("memoryBtn").disabled = false;
+    setTurnInFlight(false);
     $("memoryBtn").textContent = "Refresh memory";
   }
 }
 
+// A single in-flight lock covers every turn path (send, retry, both repairs,
+// memory refresh) so concurrent generations can never interleave transcript
+// order or burn extra API calls. The keyboard shortcut, every turn button, and
+// render()'s button-state logic all respect it.
+const TURN_LOCK_BUTTONS = ["sendBtn", "retryBtn", "hijackBtn", "continuityBtn", "memoryBtn", "repairAgencyBtn", "repairContinuityBtn"];
+function setTurnInFlight(on) {
+  turnInFlight = on;
+  TURN_LOCK_BUTTONS.forEach(id => {
+    const el = $(id);
+    if (el) el.disabled = on;
+  });
+}
+
 async function send() {
+  if (turnInFlight) return;
   const text = $("input").value.trim();
   if (!text) return;
 
-  state.messages.push({ role: "user", content: text });
-  $("input").value = "";
-  save();
-  render();
-
-  $("sendBtn").disabled = true;
+  setTurnInFlight(true);
   $("sendBtn").textContent = "Writing…";
   try {
+    state.messages.push({ role: "user", content: text });
+    $("input").value = "";
+    save();
+    render();
     const reply = await callAI();
     acceptOrBlock(reply);
   } catch (err) {
     appendVisual("system", "Error", err.message);
   } finally {
-    $("sendBtn").disabled = false;
+    setTurnInFlight(false);
     $("sendBtn").textContent = "Send ➜";
+    render();
   }
 }
 
 async function retry(agencyCorrection = false) {
+  if (turnInFlight) return;
   const roles = state.messages.map(m => m.role);
   const assistantIdx = roles.lastIndexOf("assistant");
   const handoffIdx = roles.lastIndexOf("handoff");
@@ -618,11 +909,10 @@ async function retry(agencyCorrection = false) {
   } else if (handoffIdx > userIdx) {
     state.messages.splice(handoffIdx, 1);
   }
+  setTurnInFlight(true);
   save();
   render();
 
-  $("retryBtn").disabled = true;
-  $("hijackBtn").disabled = true;
   const correction = agencyCorrection
     ? `REPAIR REQUEST: The rejected draft crossed the role boundary. Write a fresh NPC turn after the user's last completed move. Keep the camera entirely on named NPCs and objective environmental events. Stop before ${state.scenario.playerName}'s response. Do not echo the rejected prose.`
     : "";
@@ -632,6 +922,7 @@ async function retry(agencyCorrection = false) {
   } catch (err) {
     appendVisual("system", "Error", err.message);
   } finally {
+    setTurnInFlight(false);
     const finalRoles = state.messages.map(m => m.role);
     const finalUser = finalRoles.lastIndexOf("user");
     const finalAssistant = finalRoles.lastIndexOf("assistant");
@@ -642,13 +933,13 @@ async function retry(agencyCorrection = false) {
 }
 
 async function repairBlockedReply() {
-  if (!pendingViolation) return;
+  if (turnInFlight || !pendingViolation) return;
   const userNote = $("agencyNote").value.trim();
   if (userNote) {
     rememberGuardLesson(userNote);
     save();
   }
-  $("repairAgencyBtn").disabled = true;
+  setTurnInFlight(true);
   $("repairAgencyBtn").textContent = "Repairing…";
   try {
     const reply = await callAI(
@@ -661,7 +952,7 @@ async function repairBlockedReply() {
     appendVisual("system", "Repair error", err.message);
     $("chat").scrollTop = $("chat").scrollHeight;
   } finally {
-    $("repairAgencyBtn").disabled = false;
+    setTurnInFlight(false);
     $("repairAgencyBtn").textContent = "Repair · uses 1 request";
   }
 }
@@ -682,11 +973,12 @@ async function repairContinuity() {
   const userIndex = state.messages.map(message => message.role).lastIndexOf("user");
   if (assistantIndex < userIndex) return;
   const rejectedReply = state.messages[assistantIndex].content;
+  if (turnInFlight) return;
   rememberGuardLesson(note);
   state.messages.splice(assistantIndex, 1);
   save();
   render();
-  $("repairContinuityBtn").disabled = true;
+  setTurnInFlight(true);
   $("repairContinuityBtn").textContent = "Replacing…";
   try {
     const correction = `CONTINUITY REPAIR: Replace the rejected assistant turn from scratch. The user identified this contradiction: ${note}\n\nREJECTED TURN — evidence only, do not imitate or continue it:\n${rejectedReply}\n\nCorrect the contradiction instead of rationalizing, defending, or preserving it. Do not invent earlier dialogue, facial cues, intuition, surveillance, research, or off-page events to make the mistake seem intentional. Do not replay any completed scene, conversation, phone call, dialogue, revelation, or action from the transcript or continuity memory. Continue chronologically after the last valid event, using only established canon and NPC knowledge with an explicit established source. Continue from the user's last valid completed turn.`;
@@ -700,19 +992,24 @@ async function repairContinuity() {
     $("continuityDialog").close();
     appendVisual("system", "Continuity repair error", error.message);
   } finally {
-    $("repairContinuityBtn").disabled = false;
+    setTurnInFlight(false);
     $("repairContinuityBtn").textContent = "Replace reply · uses 1 request";
   }
 }
 
 function persistCloudSync() {
-  localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify({
-    enabled: Boolean(cloudSync.enabled),
-    code: cloudSync.code || "",
-    revision: Number(cloudSync.revision || 0),
-    lastSyncedAt: cloudSync.lastSyncedAt || "",
-    autoSync: cloudSync.autoSync !== false
-  }));
+  try {
+    localStorage.setItem(SYNC_STORAGE_KEY, JSON.stringify({
+      enabled: Boolean(cloudSync.enabled),
+      code: cloudSync.code || "",
+      revision: Number(cloudSync.revision || 0),
+      lastSyncedAt: cloudSync.lastSyncedAt || "",
+      autoSync: cloudSync.autoSync !== false
+    }));
+  } catch (error) {
+    console.warn("RP Studio: sync-state save failed:", error);
+    showStorageBanner();
+  }
 }
 
 function setSyncStatus(message, kind = "") {
@@ -798,7 +1095,12 @@ function connectionFromForm() {
 
 function saveConnectionFromForm() {
   state.settings = connectionFromForm();
-  localStorage.setItem("rp.settings", JSON.stringify(state.settings));
+  try {
+    localStorage.setItem("rp.settings", JSON.stringify(state.settings));
+  } catch (error) {
+    console.warn("RP Studio: settings save failed:", error);
+    showStorageBanner();
+  }
 }
 
 async function cloudRequest(method, body = null, codeValue = cloudSync.code) {
@@ -826,14 +1128,23 @@ async function cloudRequest(method, body = null, codeValue = cloudSync.code) {
 }
 
 function applyCloudPayload(payload) {
-  const incoming = payload.library;
+  preserveCorruptBootKeys();
+  const incoming = payload?.library;
+  if (!incoming?.stories || !Object.keys(incoming.stories).length) {
+    throw new Error("The cloud copy has no stories, so it was not applied. Your local stories are untouched.");
+  }
+  clearPendingViolation();
   storyLibrary = {
     version: Number(incoming.version || 1),
     activeId: incoming.stories[incoming.activeId] ? incoming.activeId : Object.keys(incoming.stories)[0],
     stories: incoming.stories,
     profiles: Array.isArray(incoming.profiles) ? incoming.profiles : [],
+    trash: normalizeTrash(incoming.trash),
     updatedAt: incoming.updatedAt || payload.savedAt || new Date().toISOString()
   };
+  if (!isLiveStory(storyLibrary.stories[storyLibrary.activeId])) {
+    storyLibrary.activeId = liveStoryIds()[0];
+  }
   const current = storyLibrary.stories[storyLibrary.activeId];
   state = {
     settings: {
@@ -847,8 +1158,13 @@ function applyCloudPayload(payload) {
     memory: { ...defaults.memory, ...(current.memory || {}) },
     guardLessons: Array.isArray(current.guardLessons) ? current.guardLessons : []
   };
-  localStorage.setItem("rp.settings", JSON.stringify(state.settings));
-  localStorage.setItem("rp.stories", JSON.stringify(storyLibrary));
+  try {
+    localStorage.setItem("rp.settings", JSON.stringify(state.settings));
+    localStorage.setItem("rp.stories", JSON.stringify(storyLibrary));
+  } catch (error) {
+    console.warn("RP Studio: local save failed:", error);
+    showStorageBanner();
+  }
   render();
   if ($("libraryDialog")?.open) renderLibrary();
   loadSettingsForm();
@@ -864,7 +1180,12 @@ async function pushCloudCopy(options = {}) {
   if ((!syncRuntime.ready && !options.allowBeforeReady) || syncRuntime.busy || !cloudSync.enabled) return;
   syncRuntime.busy = true;
   setSyncStatus("Encrypting and uploading…", "working");
+  let uploaded = false;
   try {
+    // Snapshot the library timestamp BEFORE the PUT. Saves made during the
+    // flight advance storyLibrary.updatedAt past this value, so stamping from
+    // the live value afterwards would wrongly mark them as synced.
+    const pushedAt = storyLibrary.updatedAt;
     const material = await syncMaterial();
     const payload = cloudPayload();
     const ciphertext = await encryptCloudPayload(payload, material.key);
@@ -873,9 +1194,10 @@ async function pushCloudCopy(options = {}) {
       ciphertext
     });
     cloudSync.revision = Number(data.revision || cloudSync.revision + 1);
-    cloudSync.lastSyncedAt = storyLibrary.updatedAt;
+    cloudSync.lastSyncedAt = pushedAt;
     persistCloudSync();
     setSyncStatus(`Synced securely · revision ${cloudSync.revision}`, "success");
+    uploaded = true;
   } catch (error) {
     if (error.status === 409) {
       setSyncStatus("Both devices have changes. Nothing was overwritten—tap Sync now to choose which copy to keep.", "error");
@@ -885,6 +1207,10 @@ async function pushCloudCopy(options = {}) {
   } finally {
     syncRuntime.busy = false;
   }
+  // Anything saved while the push was in flight is still dirty — queue another
+  // push instead of silently dropping it. (Only on success: a 409 must not
+  // re-push in a loop.)
+  if (uploaded && isLocalDirty()) scheduleCloudPush();
 }
 
 async function fetchCloudCopy(codeValue = cloudSync.code) {
@@ -914,6 +1240,11 @@ async function connectCloudSync() {
   const code = normalizeSyncCode($("syncCode").value);
   await syncMaterial(code);
   if (!confirm("Download the encrypted cloud library to this device? This replaces the stories and profiles currently stored in this browser. Connection details remain local.")) return;
+  if (liveStoryIds().length) {
+    // Snapshot the local library first — a stale or mistyped code must never
+    // silently swap in an older cloud copy with no way back.
+    downloadBackupFile(`RP-Studio-pre-connect-backup-${new Date().toISOString().slice(0, 10)}.json`);
+  }
   setSyncStatus("Downloading and decrypting…", "working");
   syncRuntime.busy = true;
   try {
@@ -944,6 +1275,16 @@ async function syncNow() {
     const localDirty = isLocalDirty();
     if (remote.revision > Number(cloudSync.revision || 0)) {
       if (localDirty && !confirm("This device and the cloud both changed. Press OK to keep the newer cloud copy on this device, or Cancel to keep this device unchanged. Nothing will be overwritten automatically.")) {
+        if (confirm("Keep this device's copy instead? It will be uploaded to the cloud as the newest version, replacing the cloud copy.")) {
+          // Force-push: adopt the remote revision as our base so the PUT no
+          // longer 409s, then upload this device's library.
+          cloudSync.revision = remote.revision;
+          syncRuntime.ready = true;
+          persistCloudSync();
+          syncRuntime.busy = false;
+          await pushCloudCopy();
+          return;
+        }
         setSyncStatus("Conflict left untouched. Export a backup before choosing a copy.", "error");
         return;
       }
@@ -1061,8 +1402,7 @@ function renderGuardLessons() {
   });
 }
 
-function exportBackup() {
-  save();
+function downloadBackupFile(filename) {
   const payload = {
     app: "RP Studio",
     formatVersion: 1,
@@ -1073,11 +1413,16 @@ function exportBackup() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `RP-Studio-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportBackup() {
+  save();
+  downloadBackupFile(`RP-Studio-backup-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 async function importBackup(file) {
@@ -1087,11 +1432,13 @@ async function importBackup(file) {
     const incoming = payload?.app === "RP Studio" ? payload.library : null;
     if (!incoming?.stories || !Object.keys(incoming.stories).length) throw new Error("That file is not a valid RP Studio backup.");
     if (!confirm("Import this backup? It will replace the stories and profiles currently saved in this browser. Your connection settings will stay unchanged.")) return;
+    clearPendingViolation();
     storyLibrary = {
       version: 1,
       activeId: incoming.stories[incoming.activeId] ? incoming.activeId : Object.keys(incoming.stories)[0],
       stories: incoming.stories,
-      profiles: Array.isArray(incoming.profiles) ? incoming.profiles : []
+      profiles: Array.isArray(incoming.profiles) ? incoming.profiles : [],
+      trash: normalizeTrash(incoming.trash)
     };
     const current = storyLibrary.stories[storyLibrary.activeId];
     state = {
@@ -1113,11 +1460,11 @@ async function importBackup(file) {
 $("settingsBtn").onclick = () => { loadSettingsForm(); $("settingsDialog").showModal(); };
 $("libraryBtn").onclick = () => { renderLibrary(); $("libraryDialog").showModal(); };
 $("editScenarioBtn").onclick = () => { loadScenarioForm(); $("scenarioDialog").showModal(); };
-$("sendBtn").onclick = send;
-$("retryBtn").onclick = () => retry(false);
-$("hijackBtn").onclick = () => retry(true);
-$("continuityBtn").onclick = openContinuityRepair;
-$("memoryBtn").onclick = refreshMemory;
+$("sendBtn").onclick = () => { if (!turnInFlight) send(); };
+$("retryBtn").onclick = () => { if (!turnInFlight) retry(false); };
+$("hijackBtn").onclick = () => { if (!turnInFlight) retry(true); };
+$("continuityBtn").onclick = () => { if (!turnInFlight) openContinuityRepair(); };
+$("memoryBtn").onclick = () => { if (!turnInFlight) refreshMemory(); };
 $("repairAgencyBtn").onclick = repairBlockedReply;
 $("editBlockedBtn").onclick = () => {
   const preview = $("blockedReply");
@@ -1188,7 +1535,14 @@ $("saveProfileBtn").onclick = () => {
   const name = $("profileName").value.trim();
   const notes = $("profileNotes").value.trim();
   if (!name) return alert("Give the character profile a name first.");
-  storyLibrary.profiles.push({ id: makeId(), name, notes });
+  if (editingProfileId) {
+    const target = storyLibrary.profiles.find(p => p.id === editingProfileId);
+    if (target) { target.name = name; target.notes = notes; }
+    editingProfileId = null;
+    $("saveProfileBtn").textContent = "Save new profile";
+  } else {
+    storyLibrary.profiles.push({ id: makeId(), name, notes });
+  }
   $("profileName").value = ""; $("profileNotes").value = "";
   save(); renderLibrary();
 };
@@ -1197,7 +1551,10 @@ $("playerProfile").onchange = (event) => {
   if (profile) { $("playerName").value = profile.name; $("playerNotes").value = profile.notes; }
 };
 $("input").addEventListener("keydown", (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") send();
+  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+    e.preventDefault();
+    if (!turnInFlight) send();
+  }
 });
 
 $("saveSettingsBtn").onclick = (e) => {
@@ -1224,14 +1581,29 @@ $("saveScenarioBtn").onclick = (e) => {
 };
 
 $("clearBtn").onclick = () => {
-  if (confirm("Start a new session? This clears the current conversation and memory, but keeps your story setup and learned guardrails.")) {
-    state.messages = [];
-    state.memory = { ...defaults.memory };
-    save();
-    render();
+  if (!confirm("Start a new session? This clears the current conversation and memory, but keeps your story setup and learned guardrails. The cleared transcript is kept in Trash in case you want it back.")) return;
+  if (state.messages.length || state.memory.summary) {
+    storyLibrary.trash.sessions.push({
+      trashId: makeId(),
+      storyId: storyLibrary.activeId,
+      title: state.scenario.title || "Untitled Story",
+      messages: state.messages.map(message => ({ ...message })),
+      memory: { ...state.memory },
+      clearedAt: new Date().toISOString()
+    });
   }
+  state.messages = [];
+  state.memory = { ...defaults.memory };
+  save();
+  render();
 };
+
+$("recoveryExportBtn").onclick = exportBackup;
+$("recoveryDismissBtn").onclick = () => { $("recoveryBanner").hidden = true; };
+$("storageExportBtn").onclick = exportBackup;
+$("storageDismissBtn").onclick = () => { $("storageBanner").hidden = true; };
 
 render();
 loadSettingsForm();
+if (bootCorrupt.keys.length) showRecoveryBanner();
 initializeCloudSync();
