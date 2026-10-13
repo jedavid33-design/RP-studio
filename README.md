@@ -91,3 +91,7 @@ Every earlier player or AI message has **⏪ Rewind to here**. After confirmatio
 Continuity memory that covers future events is reset, and story-specific learned corrections are cleared on the rewound branch to avoid referring to erased future events. Built-in player-character agency protection is preserved.
 
 **Restore as new story** recreates the original timeline in a separate story without overwriting the edited branch or deleting the snapshot. Snapshots are included in JSON backups and encrypted cloud sync, including across devices. Pre-v1.2.2 backups still import.
+
+## v1.2.3: Agency repair refinement
+
+The system now repeats a short NPC-only handoff rule, and both the Hands Off and Repair paths include an excerpt from the rejected reply to tell the model what not to imitate. Repair temperature is limited to 0.4. Additional named-player expressions are detected before saving. No new automatic calls or Worker change.

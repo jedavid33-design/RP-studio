@@ -368,7 +368,7 @@ function findAgencyViolation(reply) {
 
   // Player named as the subject of an action, perception, decision, speech,
   // movement, or state. Harmless object references such as "behind Jace" pass.
-  const playerVerbs = "(?:steps?|stepped|moves?|moved|walks?|walked|follows?|followed|nods?|nodded|shakes?|shook|looks?|looked|glances?|glanced|watches?|watched|sees?|saw|hears?|heard|notices?|noticed|recognizes?|recognized|understands?|understood|remembers?|remembered|suspects?|suspected|feels?|felt|thinks?|thought|wonders?|wondered|realizes?|realized|knows?|knew|wants?|wanted|needs?|needed|decides?|decided|chooses?|chose|reaches?|reached|takes?|took|accepts?|accepted|allows?|allowed|lets?|let|leans?|leaned|turns?|turned|pauses?|paused|hesitates?|hesitated|freezes?|froze|smiles?|smiled|frowns?|frowned|laughs?|laughed|breathes?|breathed|sighs?|sighed|gasps?|gasped|replies?|replied|says?|said|asks?|asked|answers?|answered|murmurs?|murmured|whispers?|whispered|speaks?|spoke|opens?|opened|closes?|closed|enters?|entered|leaves?|left|sits?|sat|stands?|stood|waits?|waited|listens?|listened|approaches?|approached|retreats?|retreated|recoils?|recoiled|reacts?|reacted|responds?|responded|stiffens?|stiffened|relaxes?|relaxed|shivers?|shivered|trembles?|trembled|swallows?|swallowed|blushes?|blushed|focuses?|focused|studies?|studied|considers?|considered|finds?|found|drifts?|drifted)";
+  const playerVerbs = "(?:grins?|grinned|smirks?|smirked|flinches?|flinched|blinks?|blinked|steps?|stepped|moves?|moved|walks?|walked|follows?|followed|nods?|nodded|shakes?|shook|looks?|looked|glances?|glanced|watches?|watched|sees?|saw|hears?|heard|notices?|noticed|recognizes?|recognized|understands?|understood|remembers?|remembered|suspects?|suspected|feels?|felt|thinks?|thought|wonders?|wondered|realizes?|realized|knows?|knew|wants?|wanted|needs?|needed|decides?|decided|chooses?|chose|reaches?|reached|takes?|took|accepts?|accepted|allows?|allowed|lets?|let|leans?|leaned|turns?|turned|pauses?|paused|hesitates?|hesitated|freezes?|froze|smiles?|smiled|frowns?|frowned|laughs?|laughed|breathes?|breathed|sighs?|sighed|gasps?|gasped|replies?|replied|says?|said|asks?|asked|answers?|answered|murmurs?|murmured|whispers?|whispered|speaks?|spoke|opens?|opened|closes?|closed|enters?|entered|leaves?|left|sits?|sat|stands?|stood|waits?|waited|listens?|listened|approaches?|approached|retreats?|retreated|recoils?|recoiled|reacts?|reacted|responds?|responded|stiffens?|stiffened|relaxes?|relaxed|shivers?|shivered|trembles?|trembled|swallows?|swallowed|blushes?|blushed|focuses?|focused|studies?|studied|considers?|considered|finds?|found|drifts?|drifted)";
   const playerAsSubject = new RegExp(`\\b${playerRef}\\b(?:\\s*,[^.!?]{0,45},)?\\s+(?:\\w+ly\\s+)?${playerVerbs}\\b`, "i");
   const subjectMatch = playerAsSubject.exec(narrationOnly);
   if (subjectMatch && !canonAlreadyContains(subjectMatch[0])) {
@@ -395,8 +395,8 @@ function findAgencyViolation(reply) {
     return { type: "New player body language or internal reaction", excerpt: internalMatch[0] };
   }
 
-  const bodyPart = "(?:eyes?|gaze|hands?|fingers?|breath|heart|pulse|stomach|body|face|voice|grip|feet|footsteps?|knees?|shoulders?|posture|muscles?|skin|cheeks?|lips?|head)";
-  const reactionVerb = "(?:trembles?|trembled|shakes?|shook|tightens?|tightened|tenses?|tensed|stiffens?|stiffened|relaxes?|relaxed|shivers?|shivered|flushes?|flushed|blushes?|blushed|pounds?|pounded|races?|raced|catches?|caught|hitches?|hitched|falters?|faltered|narrows?|narrowed|widens?|widened|drops?|dropped|lifts?|lifted|turns?|turned|recoils?|recoiled|leans?|leaned|echo(?:es)?|echoed|betrays?|betrayed|reveals?|revealed|shows?|showed|is|was|becomes?|became)";
+  const bodyPart = "(?:eyes?|gaze|hands?|fingers?|breath|heart|pulse|stomach|jaw|mouth|chest|body|face|voice|grip|feet|footsteps?|knees?|shoulders?|posture|muscles?|skin|cheeks?|lips?|head)";
+  const reactionVerb = "(?:clenches?|clenched|parts?|parted|curls?|curled|flickers?|flickered|trembles?|trembled|shakes?|shook|tightens?|tightened|tenses?|tensed|stiffens?|stiffened|relaxes?|relaxed|shivers?|shivered|flushes?|flushed|blushes?|blushed|pounds?|pounded|races?|raced|catches?|caught|hitches?|hitched|falters?|faltered|narrows?|narrowed|widens?|widened|drops?|dropped|lifts?|lifted|turns?|turned|recoils?|recoiled|leans?|leaned|echo(?:es)?|echoed|betrays?|betrayed|reveals?|revealed|shows?|showed|is|was|becomes?|became)";
   const playerBodyReaction = new RegExp(`\\b${playerRef}(?:'s|’s)\\s+${bodyPart}\\s+(?:\\w+ly\\s+)?${reactionVerb}\\b`, "i");
   const bodyReactionMatch = playerBodyReaction.exec(narrationOnly);
   if (bodyReactionMatch && !canonAlreadyContains(bodyReactionMatch[0])) {
@@ -921,7 +921,10 @@ function buildTurnMessages(extraInstruction = "") {
   const recent = state.messages.slice(Math.min(state.memory.through, state.messages.length));
   // Some storytelling models echo or mishandle a system message placed after
   // the transcript. Keep every control instruction in the leading system turn.
-  const turnControl = `NEXT-TURN CONTROL\nContinue after the user's completed move. Begin with a named NPC or an objective environmental event. Do not narrate, extend, restage, or perceive through ${state.scenario.playerName}. End when ${state.scenario.playerName} must respond.`;
+  const turnControl = `NPC-ONLY HANDOFF: The player exclusively controls ${state.scenario.playerName}. Every new sentence must describe an NPC or the setting, not the player's words, actions, expressions, thoughts, feelings, or choices. Prior assistant-written player actions are not examples to copy.
+Allowed: "Matteo offered his hand and waited."
+Forbidden: "${state.scenario.playerName} took it and smiled."
+Even during emotional scenes, end the NPC beat before ${state.scenario.playerName} reacts. Do not narrate in second person. Do not reuse these examples.`;
   const correction = extraInstruction ? `\n\nONE-TURN CORRECTION\n${extraInstruction}` : "";
   const messages = [{ role: "system", content: `${systemPrompt()}\n\n${turnControl}${correction}` }];
   if (state.memory.summary) {
@@ -1078,6 +1081,7 @@ async function retry(agencyCorrection = false) {
   const handoffIdx = roles.lastIndexOf("handoff");
   const userIdx = roles.lastIndexOf("user");
   if (userIdx < 0) return;
+  const rejectedDraft = agencyCorrection && assistantIdx > userIdx ? state.messages[assistantIdx].content : "";
   if (assistantIdx > userIdx) {
     state.messages.splice(assistantIdx, 1);
   } else if (handoffIdx > userIdx) {
@@ -1088,10 +1092,10 @@ async function retry(agencyCorrection = false) {
   render();
 
   const correction = agencyCorrection
-    ? `REPAIR REQUEST: The rejected draft crossed the role boundary. Write a fresh NPC turn after the user's last completed move. Keep the camera entirely on named NPCs and objective environmental events. Stop before ${state.scenario.playerName}'s response. Do not echo the rejected prose.`
+    ? `REPAIR: The last assistant reply was rejected because it wrote actions or reactions for ${state.scenario.playerName}. This reply is not canon. Excerpt to avoid repeating: "${String(rejectedDraft).slice(0, 400).replace(/"/g, "'")}". Write a DIFFERENT NPC-only continuation from the latest completed player turn. NPCs can offer and wait; never choose a response for the player. End before any player action.`
     : "";
   try {
-    const reply = await callAI(correction, correction ? { temperature: Math.min(Number(state.settings.temperature), 0.6) } : {});
+    const reply = await callAI(correction, correction ? { temperature: Math.min(Number(state.settings.temperature), 0.4) } : {});
     acceptOrBlock(reply);
   } catch (err) {
     appendVisual("system", "Error", err.message);
@@ -1117,8 +1121,8 @@ async function repairBlockedReply() {
   $("repairAgencyBtn").textContent = "Repairing…";
   try {
     const reply = await callAI(
-      `REPAIR REQUEST: A draft was blocked for crossing the role boundary. Write a new NPC turn after the user's latest completed move. Use named NPCs and objective environmental events only. Stop before ${state.scenario.playerName} acts, thinks, feels, notices, answers, or decides.${userNote ? ` The user identified this specific problem: ${userNote}` : ""} Do not defend, explain, or preserve the rejected mistake.`,
-      { temperature: Math.min(Number(state.settings.temperature), 0.6) }
+      `REPAIR: The previous output was rejected for controlling ${state.scenario.playerName}. The rejected wording is not canon: "${String(pendingViolation).slice(0, 400).replace(/"/g, "'")}". ${userNote ? `User correction: ${userNote.slice(0, 400)}.` : ""} Write a NEW NPC-only continuation after the latest player turn. Describe only NPCs and objective events. Never write the player's dialogue, choices, movement, thoughts, expression, or reactions. End when the player must respond; do not imitate rejected text.`,
+      { temperature: Math.min(Number(state.settings.temperature), 0.4) }
     );
     if (acceptOrBlock(reply, true)) $("agencyDialog").close();
   } catch (err) {
