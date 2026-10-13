@@ -1744,7 +1744,46 @@ async function importBackup(file) {
   }
 }
 
-$("settingsBtn").onclick = () => { loadSettingsForm(); $("settingsDialog").showModal(); };
+
+// Reveal only on explicit interaction, never in logs, backups or cloud payloads.
+// Close and background events re-mask secrets even if the app stays running.
+function hideConnectionSecrets() {
+  [["appPassword", "showAppPasswordBtn"], ["syncCode", "showSyncCodeBtn"]].forEach(([inputId, buttonId]) => {
+    const input = $(inputId), button = $(buttonId);
+    input.type = "password";
+    button.textContent = "Show";
+    button.setAttribute("aria-pressed", "false");
+  });
+}
+function toggleConnectionSecret(inputId, buttonId) {
+  const input = $(inputId), button = $(buttonId);
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  button.textContent = show ? "Hide" : "Show";
+  button.setAttribute("aria-pressed", String(show));
+}
+$("showAppPasswordBtn").onclick = () => toggleConnectionSecret("appPassword", "showAppPasswordBtn");
+$("showSyncCodeBtn").onclick = () => toggleConnectionSecret("syncCode", "showSyncCodeBtn");
+$("copyAppPasswordBtn").onclick = async () => {
+  const password = $("appPassword").value;
+  if (!password) {
+    $("passwordHelp").textContent = "No password is saved in this field.";
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(password);
+    $("passwordHelp").textContent = "Password copied. Paste it into your password manager, then clear your clipboard when finished.";
+  } catch {
+    $("passwordHelp").textContent = "Clipboard access was blocked. Tap Show, then select the text to copy it manually.";
+  }
+};
+$("settingsDialog").addEventListener("close", () => {
+  hideConnectionSecrets();
+  $("passwordHelp").textContent = "Reveal it only when you are ready to save it securely.";
+});
+document.addEventListener("visibilitychange", () => { if (document.hidden) hideConnectionSecrets(); });
+
+$("settingsBtn").onclick = () => { hideConnectionSecrets(); loadSettingsForm(); $("settingsDialog").showModal(); };
 $("libraryBtn").onclick = () => { renderLibrary(); $("libraryDialog").showModal(); };
 $("editScenarioBtn").onclick = () => { loadScenarioForm(); $("scenarioDialog").showModal(); };
 $("spiceQuick").addEventListener("input", () => updateSpiceOutput("spiceQuick", "spiceQuickValue"));

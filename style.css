@@ -100,6 +100,11 @@ dialog::backdrop { background: rgba(54, 40, 64, .3); backdrop-filter: blur(8px);
 .modal-kicker { color: var(--accent3); font-size: 10px; font-weight: 750; text-transform: uppercase; letter-spacing: .12em; }
 .panel label { display: block; margin: 14px 0; color: var(--muted); font-size: 12px; font-weight: 650; letter-spacing: .02em; }
 .panel input, .panel textarea, .panel select { display: block; width: 100%; margin-top: 7px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255, 255, 255, .84); color: var(--text); outline: none; }
+.secret-field { display: flex; align-items: center; gap: 7px; margin-top: 7px; margin-bottom: 13px; }
+.panel .secret-field input { flex: 1; min-width: 0; margin: 0; }
+.secret-field button { flex: none; min-height: 44px; padding: 9px 13px; font-size: 12px; }
+.secret-help { font-size: 11px; line-height: 1.45; color: var(--muted); margin: -7px 2px 13px; }
+@media (max-width: 390px) { .secret-field { flex-wrap: wrap; } .panel .secret-field input { flex-basis: 100%; } }
 .panel input:focus, .panel textarea:focus, .panel select:focus { border-color: var(--accent2); box-shadow: 0 0 0 3px rgba(169,139,217,.11); }
 .hint { color: var(--muted); font-size: 12px; line-height: 1.5; padding: 10px 12px; border-radius: 12px; background: rgba(239, 231, 246, .72); }
 .dialog-copy { color: var(--muted); line-height: 1.55; }

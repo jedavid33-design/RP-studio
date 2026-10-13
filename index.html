@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.2.4" />
+  <link rel="stylesheet" href="style.css?v=1.2.5" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -33,7 +33,7 @@
     </div>
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.2.4 · PRIVATE CLOUD SYNC</div>
+        <div class="eyebrow">RP STUDIO · v1.2.5 · PRIVATE CLOUD SYNC</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
@@ -76,7 +76,13 @@
     <form method="dialog" class="panel">
       <div class="panel-head"><div><div class="modal-kicker">RP Studio</div><h2>Connection</h2></div><button class="icon-btn" value="cancel" aria-label="Close">✕</button></div>
       <label>Worker URL<input id="workerUrl" placeholder="https://your-worker.workers.dev" /></label>
-      <label>App password<input id="appPassword" type="password" placeholder="The password you set on the Worker" /></label>
+      <label for="appPassword">App password</label>
+       <div class="secret-field">
+         <input id="appPassword" type="password" autocomplete="off" placeholder="The password you set on the Worker" />
+         <button type="button" id="showAppPasswordBtn" class="secondary" aria-controls="appPassword" aria-pressed="false">Show</button>
+         <button type="button" id="copyAppPasswordBtn" class="secondary">Copy</button>
+       </div>
+       <div id="passwordHelp" class="secret-help" role="status" aria-live="polite">Reveal it only when you are ready to save it securely.</div>
       <label>OpenRouter model<input id="model" value="openrouter/free" /></label>
       <div class="hint">Start with <code>openrouter/free</code> just to prove the app works. Later, paste any OpenRouter model ID you want to test.</div>
       <label>Temperature<input id="temperature" type="number" min="0" max="2" step="0.1" value="0.9" /></label>
@@ -85,7 +91,11 @@
       <div class="hint">The Worker URL and app password are stored in this browser's local storage as plain text. Anyone with access to this browser's site data can read them.</div>
       <h3>Private cloud sync</h3>
       <div class="hint">Syncs stories, transcripts, memories, profiles, and model preferences between your devices. Everything is encrypted in this browser before it reaches your Worker. Enter the same Worker URL, app password, and sync code on each device.</div>
-      <label>Sync code<input id="syncCode" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Create one here or paste it from your other device" /></label>
+      <label for="syncCode">Sync code</label>
+       <div class="secret-field">
+         <input id="syncCode" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Create one here or paste it from your other device" />
+         <button type="button" id="showSyncCodeBtn" class="secondary" aria-controls="syncCode" aria-pressed="false">Show</button>
+       </div>
       <div class="sync-actions">
         <button type="button" id="createSyncBtn" class="primary">Create code &amp; upload</button>
         <button type="button" id="connectSyncBtn" class="secondary">Connect &amp; download</button>
@@ -190,6 +200,6 @@
   </dialog>
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
-  <script src="app.js?v=1.2.4"></script>
+  <script src="app.js?v=1.2.5"></script>
 </body>
 </html>

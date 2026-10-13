@@ -104,3 +104,7 @@ JSON schema:
 `{"app":"RP Studio","kind":"story-blueprint","formatVersion":1,"name":"Name","fields":{"title":"...","playerName":"...","playerNotes":"...","npcNotes":"...","premise":"...","styleNotes":"...","boundaryNotes":"...","spiceBalance":30}}`.
 For reusable parts use `"kind":"story-block"` with a subset of fields, optionally `"apply":"append"` or `"apply":"replace"`.
 The parser rejects unknown keys, files over 128 KB, and text fields over 30,000 characters. The library's ordinary backup import remains separate. No Worker update required.
+
+## v1.2.5: Connection secret recovery
+
+The Connection dialog now has a **Show/Hide** toggle and **Copy** button for the saved Worker app password, and a Show/Hide toggle for the existing private cloud sync code. Secrets are revealed only locally, hidden when the dialog closes or the app backgrounds, and never included in story backups. Clipboard copying is a direct user action; clipboard contents may remain readable by apps until replaced or cleared. Save secrets in a trusted password manager; do not share screenshots with revealed values.
