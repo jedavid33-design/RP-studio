@@ -1606,6 +1606,111 @@ function exportBackup() {
   downloadBackupFile(`RP-Studio-backup-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
+
+const IMPORT_FIELDS = {
+  title: "scenarioTitle", playerName: "playerName",
+  playerNotes: "playerNotes", npcNotes: "npcNotes",
+  premise: "premise", styleNotes: "styleNotes",
+  boundaryNotes: "boundaryNotes", spiceBalance: "spiceScenario"
+};
+const IMPORT_LABELS = {
+  title: "Title", playerName: "Player", playerNotes: "Player background",
+  npcNotes: "AI characters", premise: "Premise",
+  styleNotes: "Writing style", boundaryNotes: "Boundaries",
+  spiceBalance: "Spice balance"
+};
+async function parseStoryImport(file) {
+  if (!file || typeof file.text !== "function") throw new Error("Select an RP Studio .json import file.");
+  if (file.size > 131072) throw new Error("Import files must be 128 KB or smaller.");
+  let data;
+  try { data = JSON.parse(await file.text()); }
+  catch { throw new Error("The file is not valid JSON."); }
+  if (data?.app !== "RP Studio" || data.formatVersion !== 1 ||
+      !["story-blueprint", "story-block"].includes(data.kind))
+    throw new Error("Expected an RP Studio story blueprint or writing block (format version 1).");
+  if (!data.fields || typeof data.fields !== "object" || Array.isArray(data.fields))
+    throw new Error("The story import has no fields.");
+  const keys = Object.keys(data.fields);
+  if (!keys.length || keys.some(key => !Object.prototype.hasOwnProperty.call(IMPORT_FIELDS, key)))
+    throw new Error("The import has no supported fields or contains unknown fields.");
+  const fields = {};
+  keys.forEach(key => {
+    const value = data.fields[key];
+    if (key === "spiceBalance") {
+      if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 100)
+        throw new Error("Spice balance must be a number between 0 and 100.");
+      fields[key] = normalizeSpiceBalance(value);
+    } else {
+      if (typeof value !== "string" || value.length > 30000)
+        throw new Error("The imported " + IMPORT_LABELS[key] + " must be text shorter than 30,000 characters.");
+      fields[key] = value;
+    }
+  });
+  if (data.kind === "story-blueprint" && (!fields.title?.trim() || !fields.playerName?.trim()))
+    throw new Error("Complete blueprints require a title and a player name.");
+  return {
+    kind: data.kind,
+    name: String(data.name || "Story import").slice(0, 100),
+    fields, append: data.kind === "story-block" && data.apply === "append"
+  };
+}
+function storyImportFields(fields) {
+  return Object.keys(fields).map(key => IMPORT_LABELS[key]).join(", ");
+}
+// Full blueprints create an isolated, empty story, never replace the active one.
+async function importStoryBlueprint(file) {
+  if (!file) return;
+  try {
+    if (turnInFlight) throw new Error("Wait until the current AI turn finishes.");
+    const doc = await parseStoryImport(file);
+    if (doc.kind !== "story-blueprint")
+      throw new Error("This is a single writing block. Import it from Edit story instead.");
+    if (!confirm(`Create a NEW story from "${doc.name}"? Importing: ${storyImportFields(doc.fields)}. Existing stories and transcripts will remain unchanged.`)) return;
+    const id = makeId(), now = new Date().toISOString();
+    const story = makeStory({ ...defaults.scenario, ...doc.fields });
+    const candidate = {
+      ...storyLibrary, activeId: id,
+      stories: { ...storyLibrary.stories, [id]: { ...story, updatedAt: now } },
+      updatedAt: now
+    };
+    // A storage failure must never strand or erase the current story.
+    try { localStorage.setItem("rp.stories", JSON.stringify(candidate)); }
+    catch {
+      showStorageBanner();
+      throw new Error("Couldn't safely save a new story. Your existing stories were not changed. Free space or export a backup, then try again.");
+    }
+    storyLibrary = candidate;
+    state = { settings: state.settings, ...story };
+    clearPendingViolation();
+    $("input").value = "";
+    $("libraryDialog").close();
+    scheduleCloudPush();
+    render();
+    alert("New story imported! Your earlier story is still in the Story Library.");
+  } catch(error) { alert("Blueprint import: " + error.message); }
+  finally { $("importBlueprintFile").value = ""; }
+}
+// Partial imports change only the unsaved Story Setup form until Save story.
+async function importStoryBlock(file) {
+  if (!file) return;
+  try {
+    if (turnInFlight) throw new Error("Wait until the current AI turn finishes.");
+    const doc = await parseStoryImport(file);
+    const verb = doc.append ? "Append to" : "Load into";
+    if (!confirm(`${verb} these Story Setup sections from "${doc.name}": ${storyImportFields(doc.fields)}? Nothing is saved until you press Save story.`)) return;
+    Object.entries(doc.fields).forEach(([key, value]) => {
+      const input = $(IMPORT_FIELDS[key]);
+      if (key === "spiceBalance") input.value = normalizeSpiceBalance(value);
+      else if (doc.append && key !== "title")
+        input.value = [input.value.trim(), value.trim()].filter(Boolean).join("\n\n");
+      else input.value = value;
+    });
+    updateSpiceOutput("spiceScenario", "spiceScenarioValue");
+    alert("Block loaded. Review the Story Setup fields and tap Save story to apply.");
+  } catch(error) { alert("Writing block import: " + error.message); }
+  finally { $("importBlockFile").value = ""; }
+}
+
 async function importBackup(file) {
   if (!file) return;
   try {
@@ -1687,6 +1792,10 @@ $("cancelContinuityBtn").onclick = () => $("continuityDialog").close();
 $("newStoryBtn").onclick = () => createStory(false);
 $("duplicateStoryBtn").onclick = () => createStory(true);
 $("exportBtn").onclick = exportBackup;
+$("importBlueprintBtn").onclick = () => { if (!turnInFlight) $("importBlueprintFile").click(); };
+$("importBlueprintFile").onchange = (event) => importStoryBlueprint(event.target.files[0]);
+$("importBlockBtn").onclick = () => { if (!turnInFlight) $("importBlockFile").click(); };
+$("importBlockFile").onchange = (event) => importStoryBlock(event.target.files[0]);
 $("importBtn").onclick = () => $("importFile").click();
 $("importFile").onchange = (event) => importBackup(event.target.files[0]);
 $("createSyncBtn").onclick = () => createCloudSync().catch(error => setSyncStatus(error.message, "error"));

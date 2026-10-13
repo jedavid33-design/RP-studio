@@ -123,6 +123,9 @@ dialog::backdrop { background: rgba(54, 40, 64, .3); backdrop-filter: blur(8px);
 .guard-lesson-text { min-width: 0; flex: 1; color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 .library-card button { min-height: 34px; padding: 6px 9px; border-radius: 10px; }
 .library-actions { margin-top: 10px; }
+.setup-import { display: grid; gap: 9px; margin: 14px 0 20px; }
+.setup-import > button { width: 100%; }
+.setup-import .hint { margin: 0; }
 .sync-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
 .sync-actions button { width: 100%; }
 .check-row { display: flex !important; align-items: center; gap: 9px; margin: 12px 2px !important; }

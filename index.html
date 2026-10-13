@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.2.3" />
+  <link rel="stylesheet" href="style.css?v=1.2.4" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -33,7 +33,7 @@
     </div>
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.2.3 · PRIVATE CLOUD SYNC</div>
+        <div class="eyebrow">RP STUDIO · v1.2.4 · PRIVATE CLOUD SYNC</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
@@ -134,6 +134,8 @@
       <div class="library-actions">
         <button type="button" id="newStoryBtn" class="primary">＋ New story</button>
         <button type="button" id="duplicateStoryBtn" class="secondary">Duplicate current</button>
+        <button type="button" id="importBlueprintBtn" class="secondary">⬇ Import story blueprint</button>
+        <input type="file" id="importBlueprintFile" accept=".json,application/json" hidden />
       </div>
       <h3>Character profiles</h3>
       <div id="profileList" class="library-list"></div>
@@ -159,6 +161,11 @@
   <dialog id="scenarioDialog">
     <form method="dialog" class="panel">
       <div class="panel-head"><div><div class="modal-kicker">Your world</div><h2>Story setup</h2></div><button class="icon-btn" value="cancel" aria-label="Close">✕</button></div>
+      <div class="setup-import">
+        <button type="button" class="secondary" id="importBlockBtn">⬇ Import writing block (.json)</button>
+        <input type="file" id="importBlockFile" accept=".json,application/json" hidden />
+        <div class="hint">Import one or several story sections here. Review the filled fields and press Save story when ready. Your conversation stays intact.</div>
+      </div>
       <label>Story title<input id="scenarioTitle" value="Trapped Hearts-ish Test" /></label>
       <label>Your character<input id="playerName" value="Olivia" /></label>
       <label>Load a saved character<select id="playerProfile"><option value="">Choose a profile…</option></select></label>
@@ -183,6 +190,6 @@
   </dialog>
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
-  <script src="app.js?v=1.2.3"></script>
+  <script src="app.js?v=1.2.4"></script>
 </body>
 </html>

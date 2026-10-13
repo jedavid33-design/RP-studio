@@ -95,3 +95,12 @@ Continuity memory that covers future events is reset, and story-specific learned
 ## v1.2.3: Agency repair refinement
 
 The system now repeats a short NPC-only handoff rule, and both the Hands Off and Repair paths include an excerpt from the rejected reply to tell the model what not to imitate. Repair temperature is limited to 0.4. Additional named-player expressions are detected before saving. No new automatic calls or Worker change.
+
+## v1.2.4: Import structured ChatGPT story blueprints
+
+The Story Library has **Import story blueprint**, which creates a new empty story (without replacing previous sessions) from a version-1 RP Studio JSON file. In **Edit story**, **Import writing block (.json)** fills only the supplied fields of the unsaved Story Setup form, with confirmation before applying and another Save story action before writing changes. Blocks can choose "apply":"append" to add to existing text fields. No code from the file is evaluated.
+
+JSON schema:
+`{"app":"RP Studio","kind":"story-blueprint","formatVersion":1,"name":"Name","fields":{"title":"...","playerName":"...","playerNotes":"...","npcNotes":"...","premise":"...","styleNotes":"...","boundaryNotes":"...","spiceBalance":30}}`.
+For reusable parts use `"kind":"story-block"` with a subset of fields, optionally `"apply":"append"` or `"apply":"replace"`.
+The parser rejects unknown keys, files over 128 KB, and text fields over 30,000 characters. The library's ordinary backup import remains separate. No Worker update required.
