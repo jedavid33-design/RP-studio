@@ -108,3 +108,12 @@ The parser rejects unknown keys, files over 128 KB, and text fields over 30,000 
 ## v1.2.5: Connection secret recovery
 
 The Connection dialog now has a **Show/Hide** toggle and **Copy** button for the saved Worker app password, and a Show/Hide toggle for the existing private cloud sync code. Secrets are revealed only locally, hidden when the dialog closes or the app backgrounds, and never included in story backups. Clipboard copying is a direct user action; clipboard contents may remain readable by apps until replaced or cleared. Save secrets in a trusted password manager; do not share screenshots with revealed values.
+
+
+## v1.2.6: iOS cloud-sync backup-navigation fix
+
+**Connect & download no longer starts an automatic JSON file download.** On iOS, programmatically downloading a pre-connect backup opened the system file preview and could interrupt the same sync flow with a generic “Load failed” network error.
+
+After successfully fetching and decrypting the cloud copy, RP Studio automatically stores a copy of the iPad's original local story library under the separate browser key `rp.preConnectRecovery.v1`, before replacing the library. This key is not included in encrypted cloud payloads, not overwritten by retries, and preserved across a story-library replacement. **Story Library → Export pre-connect recovery** lets users explicitly download that locally stored copy later.
+
+If saving the recovery copy fails (for example, browser storage quota), connection aborts without applying the remote library. Network fetch failures now offer a specific non-secret explanation. No Worker changes and no extra API calls.

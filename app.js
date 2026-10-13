@@ -110,6 +110,7 @@ function clearPendingViolation() {
   pendingViolationDetail = null;
 }
 const SYNC_STORAGE_KEY = "rp.cloudSync.v1";
+const PRE_CONNECT_RECOVERY_KEY = "rp.preConnectRecovery.v1";
 let cloudSync = safeParse(SYNC_STORAGE_KEY, null);
 cloudSync = {
   enabled: false,
@@ -598,6 +599,7 @@ function renderRewindSnapshots() {
 }
 
 function renderLibrary() {
+  $("exportPreConnectBtn").hidden = !readPreConnectRecovery();
   const storyList = $("storyList");
   storyList.innerHTML = "";
   Object.entries(storyLibrary.stories)
@@ -1419,15 +1421,22 @@ async function connectCloudSync() {
   const code = normalizeSyncCode($("syncCode").value);
   await syncMaterial(code);
   if (!confirm("Download the encrypted cloud library to this device? This replaces the stories and profiles currently stored in this browser. Connection details remain local.")) return;
-  if (liveStoryIds().length) {
-    // Snapshot the local library first — a stale or mistyped code must never
-    // silently swap in an older cloud copy with no way back.
-    downloadBackupFile(`RP-Studio-pre-connect-backup-${new Date().toISOString().slice(0, 10)}.json`);
-  }
+  // Do NOT auto-download JSON here. On iOS that navigation opens the file
+  // preview and can cancel the pending fetch with "Load failed".
   setSyncStatus("Downloading and decrypting…", "working");
   syncRuntime.busy = true;
   try {
-    const remote = await fetchCloudCopy(code);
+    let remote;
+    try { remote = await fetchCloudCopy(code); }
+    catch (error) {
+      if (/^(?:Load failed|Failed to fetch|NetworkError)/i.test(String(error?.message || ""))) {
+        throw new Error("Unable to reach the Worker from this browser. Nothing was replaced. Check your connection and Worker URL. If it continues, send the message, not your passwords.");
+      }
+      throw error;
+    }
+    // Snapshot locally only AFTER a valid encrypted cloud copy is obtained,
+    // and BEFORE overwriting any local stories. No navigation or download.
+    savePreConnectRecovery();
     cloudSync = {
       enabled: true,
       code: remote.material.code,
@@ -1438,7 +1447,7 @@ async function connectCloudSync() {
     applyCloudPayload(remote.payload);
     persistCloudSync();
     syncRuntime.ready = true;
-    setSyncStatus(`Connected and downloaded · revision ${cloudSync.revision}`, "success");
+    setSyncStatus(`Connected and downloaded · revision ${cloudSync.revision}. An iPad recovery copy is available in Story Library.`, "success");
   } finally {
     syncRuntime.busy = false;
   }
@@ -1583,12 +1592,35 @@ function renderGuardLessons() {
   });
 }
 
-function downloadBackupFile(filename) {
+// A browser-initiated file download can navigate an iOS in-app browser away
+// from RP Studio. Downloads must happen only when the user explicitly taps
+// an Export button, never automatically during an ongoing sync request.
+function readPreConnectRecovery() {
+  try {
+    const result = JSON.parse(localStorage.getItem(PRE_CONNECT_RECOVERY_KEY) || "null");
+    return result?.library?.stories ? result : null;
+  } catch { return null; }
+}
+function savePreConnectRecovery() {
+  // Keep the first original iPad library rather than replacing it if the
+  // user retries connection. This snapshot lives outside cloud replacement.
+  if (readPreConnectRecovery()) return;
+  try {
+    localStorage.setItem(PRE_CONNECT_RECOVERY_KEY, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      library: storyLibrary
+    }));
+  } catch {
+    showStorageBanner();
+    throw new Error("Could not save the iPad recovery snapshot. Your stories were not replaced. Open Story Library and export a backup manually before trying Connect & download again.");
+  }
+}
+function downloadBackupFile(filename, sourceLibrary = storyLibrary) {
   const payload = {
     app: "RP Studio",
     formatVersion: 1,
     exportedAt: new Date().toISOString(),
-    library: storyLibrary
+    library: sourceLibrary
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -1831,6 +1863,11 @@ $("cancelContinuityBtn").onclick = () => $("continuityDialog").close();
 $("newStoryBtn").onclick = () => createStory(false);
 $("duplicateStoryBtn").onclick = () => createStory(true);
 $("exportBtn").onclick = exportBackup;
+$("exportPreConnectBtn").onclick = () => {
+  const backup = readPreConnectRecovery();
+  if (!backup) return alert("No pre-connect recovery copy is stored on this device.");
+  downloadBackupFile(`RP-Studio-pre-connect-recovery-${String(backup.savedAt || "").slice(0, 10) || new Date().toISOString().slice(0, 10)}.json`, backup.library);
+};
 $("importBlueprintBtn").onclick = () => { if (!turnInFlight) $("importBlueprintFile").click(); };
 $("importBlueprintFile").onchange = (event) => importStoryBlueprint(event.target.files[0]);
 $("importBlockBtn").onclick = () => { if (!turnInFlight) $("importBlockFile").click(); };
