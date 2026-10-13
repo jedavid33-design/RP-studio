@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.2.1" />
+  <link rel="stylesheet" href="style.css?v=1.2.2" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -33,7 +33,7 @@
     </div>
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.2.1 · PRIVATE CLOUD SYNC</div>
+        <div class="eyebrow">RP STUDIO · v1.2.2 · PRIVATE CLOUD SYNC</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
@@ -140,7 +140,10 @@
       <label>Profile name<input id="profileName" placeholder="Olivia" /></label>
       <label>Character notes<textarea id="profileNotes" rows="4" placeholder="Appearance, personality, history, boundaries…"></textarea></label>
       <button type="button" id="saveProfileBtn" class="secondary full-width">Save new profile</button>
-      <h3>Trash</h3>
+      <h3>Rewind snapshots</h3>
+       <div class="hint">Rewinding keeps the full original conversation here. Restore it as a separate story without overwriting the version you kept. Snapshots are included in exported backups and encrypted cloud sync.</div>
+       <div id="rewindList" class="library-list"></div>
+       <h3>Trash</h3>
       <div class="hint">Deleted stories, cleared sessions, and removed profiles wait here until you delete them forever. Trash syncs between your devices like everything else.</div>
       <div id="trashList" class="library-list"></div>
       <h3>Portable backup</h3>
@@ -180,6 +183,6 @@
   </dialog>
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
-  <script src="app.js?v=1.2.1"></script>
+  <script src="app.js?v=1.2.2"></script>
 </body>
 </html>

@@ -84,3 +84,10 @@ The frontend does not impose a PG-13 filter. The actual model/provider you choos
 ## Spice Balance (v1.2.1)
 
 Adjust the 🌶️ slider beneath the chat or in Edit story. The default is 30% spice / 70% story. The 0–100% control guides longer-term pacing, not explicitness or a per-turn quota; it must not interrupt an unfolding scene or override consent, current user instructions, or the player-character agency firewall. The preference is saved independently with each story, so local backups and encrypted cloud sync preserve it. Existing stories without this setting default to 30%.
+
+## Rewind to Here (v1.2.2)
+Every earlier player or AI message has **⏪ Rewind to here**. After confirmation, it preserves the selected message and shortens the active timeline. Before doing so, the app atomically saves the original messages, scenario, continuity memory, learned corrections, and current draft as a snapshot in **Story library → Rewind snapshots**. If local storage cannot retain the snapshot, nothing is rewound. No OpenRouter request is made.
+
+Continuity memory that covers future events is reset, and story-specific learned corrections are cleared on the rewound branch to avoid referring to erased future events. Built-in player-character agency protection is preserved.
+
+**Restore as new story** recreates the original timeline in a separate story without overwriting the edited branch or deleting the snapshot. Snapshots are included in JSON backups and encrypted cloud sync, including across devices. Pre-v1.2.2 backups still import.

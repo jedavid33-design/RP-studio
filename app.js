@@ -86,6 +86,7 @@ if (!storyLibrary || !storyLibrary.stories || !Object.keys(storyLibrary.stories)
 }
 storyLibrary.profiles = Array.isArray(storyLibrary.profiles) ? storyLibrary.profiles : [];
 storyLibrary.trash = normalizeTrash(storyLibrary.trash);
+storyLibrary.rewindSnapshots = Array.isArray(storyLibrary.rewindSnapshots) ? storyLibrary.rewindSnapshots : [];
 if (!isLiveStory(storyLibrary.stories[storyLibrary.activeId])) {
   storyLibrary.activeId = liveStoryIds()[0];
 }
@@ -452,10 +453,11 @@ function render() {
   if (!state.messages.length) {
     appendVisual("system", "Ready", `Story loaded. You control ${state.scenario.playerName}; the AI controls everyone else.\n\nWrite your opening move below.`);
   } else {
-    state.messages.forEach(m => appendVisual(
+    state.messages.forEach((m, index) => appendVisual(
       m.role,
       m.role === "user" ? state.scenario.playerName : m.role === "handoff" ? "Your move" : "AI",
-      m.content
+      m.content,
+      index
     ));
   }
   const lastUser = state.messages.map(m => m.role).lastIndexOf("user");
@@ -464,6 +466,135 @@ function render() {
   $("hijackBtn").disabled = turnInFlight || lastAssistant < lastUser;
   $("continuityBtn").disabled = turnInFlight || lastAssistant < lastUser;
   chat.scrollTop = chat.scrollHeight;
+}
+
+// Commit both timelines together. A failed save never removes a story turn.
+function commitRewindLibrary(candidate) {
+  try {
+    localStorage.setItem("rp.stories", JSON.stringify(candidate));
+  } catch (error) {
+    console.warn("RP Studio rewind storage failure:", error);
+    showStorageBanner();
+    alert("Rewind cancelled: RP Studio could not save the original timeline as a restore point. Your story is unchanged. Export a backup or free browser storage before retrying.");
+    return false;
+  }
+  storyLibrary = candidate;
+  scheduleCloudPush();
+  return true;
+}
+
+function rewindToMessage(index) {
+  if (turnInFlight || !Number.isInteger(index) || index < 0 || index >= state.messages.length - 1) return;
+  const picked = state.messages[index];
+  if (!picked || !["user", "assistant"].includes(picked.role)) return;
+  const kept = index + 1, removed = state.messages.length - kept;
+  const covered = Number(state.memory.through);
+  const invalidMemory = covered > kept || !Number.isFinite(covered) ||
+    (Boolean(state.memory.summary) && covered <= 0);
+  const prompt = `Rewind to AFTER this ${picked.role === "user" ? "player" : "AI"} message? ${removed} later message${removed === 1 ? "" : "s"} will be removed from the active timeline. A complete restore snapshot will be saved in Story library → Rewind snapshots. Future continuity memory (if any) and story-specific learned corrections will be cleared to prevent timeline leaks. Any typed draft will be kept in the snapshot.`;
+  if (!confirm(prompt)) return;
+  const now = new Date().toISOString();
+  const snapshot = {
+    snapshotId: makeId(), createdAt: now, originStoryId: storyLibrary.activeId,
+    title: state.scenario.title || "Untitled Story", keptCount: kept,
+    scenario: { ...state.scenario },
+    messages: state.messages.map(m => ({ ...m })),
+    memory: { ...state.memory }, guardLessons: [...state.guardLessons],
+    draft: $("input").value
+  };
+  const nextMessages = state.messages.slice(0, kept).map(m => ({ ...m }));
+  const nextMemory = invalidMemory ? { ...defaults.memory } : { ...defaults.memory, ...state.memory };
+  const candidate = {
+    ...storyLibrary,
+    rewindSnapshots: [...storyLibrary.rewindSnapshots, snapshot],
+    stories: {
+      ...storyLibrary.stories,
+      [storyLibrary.activeId]: {
+        ...storyLibrary.stories[storyLibrary.activeId],
+        scenario: { ...state.scenario }, messages: nextMessages,
+        memory: nextMemory, guardLessons: [], updatedAt: now
+      }
+    },
+    updatedAt: now
+  };
+  if (!commitRewindLibrary(candidate)) return;
+  clearPendingViolation();
+  state.messages = nextMessages;
+  state.memory = nextMemory;
+  state.guardLessons = [];
+  $("input").value = "";
+  render();
+}
+
+function restoreRewindSnapshot(snapshotId) {
+  if (turnInFlight) return;
+  const snapshot = storyLibrary.rewindSnapshots.find(s => s.snapshotId === snapshotId);
+  if (!snapshot || !Array.isArray(snapshot.messages)) return;
+  if (!confirm(`Restore “${snapshot.title}”'s full ${snapshot.messages.length}-message timeline as a NEW story? The rewound version will be preserved, and the restore snapshot will remain available.`)) return;
+  const id = makeId(), now = new Date().toISOString();
+  const restored = makeStory(
+    { ...defaults.scenario, ...(snapshot.scenario || {}), title: `${snapshot.title || "Untitled Story"} (restored rewind)` },
+    snapshot.messages.map(m => ({ ...m })),
+    { ...defaults.memory, ...(snapshot.memory || {}) },
+    Array.isArray(snapshot.guardLessons) ? snapshot.guardLessons : []
+  );
+  const candidate = {
+    ...storyLibrary,
+    activeId: id,
+    stories: { ...storyLibrary.stories, [id]: { ...restored, updatedAt: now } },
+    updatedAt: now
+  };
+  if (!commitRewindLibrary(candidate)) return;
+  clearPendingViolation();
+  state = { settings: state.settings, ...restored };
+  $("input").value = snapshot.draft || "";
+  render();
+  renderLibrary();
+  $("libraryDialog").close();
+}
+
+function deleteRewindSnapshot(snapshotId) {
+  if (turnInFlight) return;
+  if (!confirm("Delete this restore snapshot forever? The timeline saved here cannot be recovered without another backup.")) return;
+  const next = storyLibrary.rewindSnapshots.filter(s => s.snapshotId !== snapshotId);
+  if (next.length === storyLibrary.rewindSnapshots.length) return;
+  if (!commitRewindLibrary({ ...storyLibrary, rewindSnapshots: next, updatedAt: new Date().toISOString() })) return;
+  renderRewindSnapshots();
+}
+
+function renderRewindSnapshots() {
+  const list = $("rewindList");
+  list.innerHTML = "";
+  const saved = [...storyLibrary.rewindSnapshots]
+    .sort((a,b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  if (!saved.length) { list.textContent = "No rewind snapshots yet."; return; }
+  saved.forEach(snapshot => {
+    const card = document.createElement("div");
+    card.className = "library-card rewind-card";
+    const main = document.createElement("div");
+    main.className = "library-card-main";
+    const title = document.createElement("div");
+    title.className = "library-card-title";
+    title.textContent = snapshot.title || "Untitled Story";
+    const note = document.createElement("div");
+    note.className = "library-card-note";
+    const cut = Math.max(0, (snapshot.messages || []).length - Number(snapshot.keptCount || 0));
+    note.textContent = `Saved ${formatTrashDate(snapshot.createdAt)} · ${cut} later message${cut === 1 ? "" : "s"} · original timeline preserved`;
+    main.append(title, note);
+    const actions = document.createElement("div");
+    actions.className = "library-card-actions";
+    const restore = document.createElement("button");
+    restore.type = "button";
+    restore.className = "secondary";
+    restore.textContent = "Restore as new story";
+    restore.onclick = () => restoreRewindSnapshot(snapshot.snapshotId);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "warning";
+    remove.textContent = "Delete snapshot";
+    remove.onclick = () => deleteRewindSnapshot(snapshot.snapshotId);
+    actions.append(restore, remove); card.append(main, actions); list.appendChild(card);
+  });
 }
 
 function renderLibrary() {
@@ -542,6 +673,7 @@ function renderLibrary() {
     };
     actions.append(player, edit, npc, remove); card.append(main, actions); profileList.appendChild(card);
   });
+  renderRewindSnapshots();
   renderTrash();
 }
 
@@ -717,7 +849,7 @@ function isOpenRouterCreditError(message) {
   return /(?:insufficient\s+(?:credits?|balance)|out\s+of\s+credits?|credit\s+balance|payment\s+required|requires?\s+more\s+credits?|upgrade\s+to\s+a\s+paid\s+account)/i.test(String(message || ""));
 }
 
-function appendVisual(role, label, content) {
+function appendVisual(role, label, content, messageIndex = null) {
   const node = $("messageTemplate").content.firstElementChild.cloneNode(true);
   node.classList.add(role === "assistant" ? "assistant" : role);
   node.querySelector(".msg-meta").textContent = label;
@@ -741,6 +873,20 @@ function appendVisual(role, label, content) {
     creditLink.rel = "noopener noreferrer";
     creditLink.textContent = "Add OpenRouter credits ↗";
     body.appendChild(creditLink);
+  }
+  if (Number.isInteger(messageIndex) && messageIndex < state.messages.length - 1 &&
+      (role === "user" || role === "assistant")) {
+    const actions = document.createElement("div");
+    actions.className = "msg-actions";
+    const rewind = document.createElement("button");
+    rewind.type = "button";
+    rewind.className = "rewind-action";
+    rewind.textContent = "⏪ Rewind to here";
+    rewind.setAttribute("aria-label", `Rewind to after message ${messageIndex + 1}`);
+    rewind.disabled = turnInFlight;
+    rewind.onclick = () => rewindToMessage(messageIndex);
+    actions.appendChild(rewind);
+    node.appendChild(actions);
   }
   $("chat").appendChild(node);
 }
@@ -899,6 +1045,7 @@ function setTurnInFlight(on) {
     const el = $(id);
     if (el) el.disabled = on;
   });
+  document.querySelectorAll(".rewind-action").forEach(button => { button.disabled = on; });
 }
 
 async function send() {
@@ -1166,6 +1313,7 @@ function applyCloudPayload(payload) {
     activeId: incoming.stories[incoming.activeId] ? incoming.activeId : Object.keys(incoming.stories)[0],
     stories: incoming.stories,
     profiles: Array.isArray(incoming.profiles) ? incoming.profiles : [],
+    rewindSnapshots: Array.isArray(incoming.rewindSnapshots) ? incoming.rewindSnapshots : [],
     trash: normalizeTrash(incoming.trash),
     updatedAt: incoming.updatedAt || payload.savedAt || new Date().toISOString()
   };
@@ -1467,6 +1615,7 @@ async function importBackup(file) {
       activeId: incoming.stories[incoming.activeId] ? incoming.activeId : Object.keys(incoming.stories)[0],
       stories: incoming.stories,
       profiles: Array.isArray(incoming.profiles) ? incoming.profiles : [],
+      rewindSnapshots: Array.isArray(incoming.rewindSnapshots) ? incoming.rewindSnapshots : [],
       trash: normalizeTrash(incoming.trash)
     };
     const current = storyLibrary.stories[storyLibrary.activeId];

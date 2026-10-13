@@ -55,6 +55,14 @@ h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(22px, 5vw,
 .msg-body { line-height: 1.62; font-size: 16px; }
 .msg-body p { margin: 0 0 1em; white-space: pre-wrap; }
 .msg-body p:last-child { margin-bottom: 0; }
+.msg-actions { display: flex; justify-content: flex-end; margin-top: 12px; padding-top: 9px; border-top: 1px solid var(--line); }
+.rewind-action { border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; min-height: 32px; background: rgba(239, 230, 247, .58); color: var(--muted); font-size: 11px; font-weight: 650; }
+.rewind-action:disabled { opacity: .45; }
+.rewind-action:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+.rewind-card { flex-wrap: wrap; }
+.rewind-card .library-card-main { flex: 1 1 200px; }
+.rewind-card .library-card-actions { flex: 0 0 auto; }
+
 .composer { z-index: 5; padding: 10px 11px max(11px, env(safe-area-inset-bottom)); background: rgba(250, 246, 252, .86); border-top: 1px solid var(--line); backdrop-filter: blur(24px) saturate(145%); -webkit-backdrop-filter: blur(24px) saturate(145%); }
 .composer-inner { max-width: 780px; margin: 0 auto; padding: 10px; border: 1px solid var(--line); border-radius: 23px; background: rgba(255, 253, 255, .78); box-shadow: var(--shadow), inset 0 1px rgba(255,255,255,.7); }
 .who-row, .composer-actions { display: flex; align-items: center; gap: 8px; }
