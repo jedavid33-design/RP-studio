@@ -63,6 +63,15 @@ h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(22px, 5vw,
 .memory-status { margin: -3px 4px 8px; color: #81728c; font-size: 10px; letter-spacing: .03em; }
 .memory-status.soon { color: #8a6334; }
 .memory-status.recommended { color: #9b3f66; font-weight: 750; }
+.spice-control, .spice-field { padding: 9px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(246, 237, 249, .62); }
+.spice-control { margin: 0 3px 8px; }
+.spice-field { margin: 16px 0; }
+.spice-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.spice-head label, .panel .spice-head label { margin: 0; color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: 0; }
+.spice-head output { color: var(--text); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 750; }
+.spice-control input[type="range"], .panel .spice-field input[type="range"] { display: block; width: 100%; height: 24px; margin: 4px 0 0; padding: 0; border: 0; box-shadow: none; background: transparent; accent-color: var(--rose); cursor: pointer; }
+.spice-control input[type="range"]:focus-visible, .panel .spice-field input[type="range"]:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+.spice-explain { margin-top: 5px; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .chip { background: linear-gradient(135deg, rgba(203, 176, 241, .2), rgba(112, 187, 196, .13)); color: var(--accent); border: 1px solid rgba(224, 201, 255, .18); border-radius: 999px; padding: 7px 11px; font-size: 12px; font-weight: 720; }
 #input { display: block; width: 100%; resize: none; min-height: 96px; max-height: 32dvh; padding: 14px 15px; border-radius: 17px; border: 1px solid var(--line); background: rgba(255, 255, 255, .76); color: var(--text); outline: none; line-height: 1.45; box-shadow: inset 0 2px 8px rgba(83,59,105,.07); }
 #input::placeholder { color: #95869f; }

@@ -80,3 +80,7 @@ The frontend does not impose a PG-13 filter. The actual model/provider you choos
 6. Branching / rewind points
 7. Export story to Markdown/EPUB
 8. Model cost tracker from API usage
+
+## Spice Balance (v1.2.1)
+
+Adjust the 🌶️ slider beneath the chat or in Edit story. The default is 30% spice / 70% story. The 0–100% control guides longer-term pacing, not explicitness or a per-turn quota; it must not interrupt an unfolding scene or override consent, current user instructions, or the player-character agency firewall. The preference is saved independently with each story, so local backups and encrypted cloud sync preserve it. Existing stories without this setting default to 30%.

@@ -10,6 +10,7 @@ const defaults = {
   },
   scenario: {
     title: "Trapped Hearts-ish Test",
+    spiceBalance: 30,
     playerName: "Olivia",
     playerNotes: "A sharp, ambitious attorney. The USER controls Olivia completely.",
     npcNotes: "Caleb Quinn — Olivia's brilliant, infuriating colleague. Confident, observant, dryly funny, and much more emotionally perceptive than Olivia gives him credit for.",
@@ -196,6 +197,28 @@ function activateStory(id) {
   render();
 }
 
+// This is an adjustable pacing preference, not an explicitness control.
+function normalizeSpiceBalance(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n / 5) * 5)) : 30;
+}
+function updateSpiceOutput(inputId, outputId) {
+  const input = $(inputId), n = normalizeSpiceBalance(input.value);
+  $(outputId).textContent = `${n}% spice · ${100 - n}% story`;
+  input.setAttribute("aria-valuetext", `${n} percent spice, ${100 - n} percent story`);
+}
+function spicePacingInstruction(value) {
+  const spice = normalizeSpiceBalance(value), plot = 100 - spice;
+  let emphasis;
+  if (spice <= 10) emphasis = "Favor plot, dialogue, and character development. Do not initiate new sexual or overtly suggestive beats.";
+  else if (spice <= 30) emphasis = "Prioritize plot, conflict, secrets, humor, and emotional growth. Flirting and intimacy can happen when earned, rather than being the default reaction to every interaction.";
+  else if (spice <= 60) emphasis = "Balance romantic and sensual tension with plot, character complexity, quiet moments, humor, and independent goals.";
+  else if (spice <= 85) emphasis = "Lean toward romance and intimacy without neglecting meaningful plot progress and the NPCs' independent lives.";
+  else emphasis = "Favor romance and intimate storytelling where it fits naturally, while preserving genuine emotional depth, continuity, and plot movement.";
+  return `STORY / SPICE BALANCE (PACING, NOT EXPLICITNESS)
+The preference for this story is about ${plot}% plot, character development, and non-intimate storytelling versus ${spice}% romance, sexual tension, and intimacy over the longer narrative. This is a LOOSE GUIDELINE across many scenes, NEVER a quota for each turn or a request to insert sex at fixed intervals. ${emphasis}
+Do not abruptly interrupt, terminate, or redirect an ongoing intimate or non-intimate scene solely to satisfy the balance. Allow transitions to unfold organically. NPCs must remain multifaceted people with distinct goals, conflict, vulnerabilities, and agency, not one-dimensional seducers. Respect consent and the established content boundaries. NEVER write the player character's dialogue, actions, thoughts, feelings, reactions, decisions, or consent. The user's instructions for the current scene take priority over this general pacing preference.`;
+}
 function systemPrompt() {
   const s = state.scenario;
   const learnedCorrections = state.guardLessons.length
@@ -232,6 +255,8 @@ ${s.playerName}: ${s.playerNotes}
 
 NPC / CAST
 ${s.npcNotes}
+
+${spicePacingInstruction(s.spiceBalance)}
 
 WRITING STYLE
 ${s.styleNotes}
@@ -405,6 +430,8 @@ function render() {
   $("storyTitle").textContent = state.scenario.title;
   $("playerChip").textContent = `You: ${state.scenario.playerName}`;
   $("hijackBtn").textContent = `Hands off ${state.scenario.playerName}`;
+  $("spiceQuick").value = normalizeSpiceBalance(state.scenario.spiceBalance);
+  updateSpiceOutput("spiceQuick", "spiceQuickValue");
   const uncompressed = Math.max(0, state.messages.length - state.memory.through);
   const memoryStatus = $("memoryStatus");
   memoryStatus.className = "memory-status";
@@ -1360,6 +1387,8 @@ function loadScenarioForm() {
     npcNotes: "npcNotes", premise: "premise", styleNotes: "styleNotes", boundaryNotes: "boundaryNotes"
   };
   Object.entries(map).forEach(([id,k]) => $(id).value = state.scenario[k]);
+  $("spiceScenario").value = normalizeSpiceBalance(state.scenario.spiceBalance);
+  updateSpiceOutput("spiceScenario", "spiceScenarioValue");
   const select = $("playerProfile");
   select.innerHTML = '<option value="">Choose a profile…</option>';
   storyLibrary.profiles.forEach(profile => {
@@ -1460,6 +1489,13 @@ async function importBackup(file) {
 $("settingsBtn").onclick = () => { loadSettingsForm(); $("settingsDialog").showModal(); };
 $("libraryBtn").onclick = () => { renderLibrary(); $("libraryDialog").showModal(); };
 $("editScenarioBtn").onclick = () => { loadScenarioForm(); $("scenarioDialog").showModal(); };
+$("spiceQuick").addEventListener("input", () => updateSpiceOutput("spiceQuick", "spiceQuickValue"));
+$("spiceQuick").addEventListener("change", () => {
+  state.scenario.spiceBalance = normalizeSpiceBalance($("spiceQuick").value);
+  updateSpiceOutput("spiceQuick", "spiceQuickValue");
+  save();
+});
+$("spiceScenario").addEventListener("input", () => updateSpiceOutput("spiceScenario", "spiceScenarioValue"));
 $("sendBtn").onclick = () => { if (!turnInFlight) send(); };
 $("retryBtn").onclick = () => { if (!turnInFlight) retry(false); };
 $("hijackBtn").onclick = () => { if (!turnInFlight) retry(true); };
@@ -1568,6 +1604,7 @@ $("saveScenarioBtn").onclick = (e) => {
   e.preventDefault();
   state.scenario = {
     title: $("scenarioTitle").value.trim() || "Untitled Story",
+    spiceBalance: normalizeSpiceBalance($("spiceScenario").value),
     playerName: $("playerName").value.trim() || "Player",
     playerNotes: $("playerNotes").value.trim(),
     npcNotes: $("npcNotes").value.trim(),
