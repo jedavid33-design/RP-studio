@@ -443,7 +443,11 @@ function cleanMemoryReply(raw) {
 function render() {
   $("storyTitle").textContent = state.scenario.title;
   $("playerChip").textContent = `You: ${state.scenario.playerName}`;
-  $("hijackBtn").textContent = `Hands off ${state.scenario.playerName}`;
+  const hijackLabel = `Hands off ${state.scenario.playerName}`;
+  const hijackFullLabel = $("hijackBtn").querySelector(".button-label-full");
+  if (hijackFullLabel) hijackFullLabel.textContent = hijackLabel;
+  else $("hijackBtn").textContent = hijackLabel;
+  $("hijackBtn").setAttribute("aria-label", hijackLabel);
   $("spiceQuick").value = normalizeSpiceBalance(state.scenario.spiceBalance);
   updateSpiceOutput("spiceQuick", "spiceQuickValue");
   const uncompressed = Math.max(0, state.messages.length - state.memory.through);
@@ -898,7 +902,8 @@ function appendVisual(role, label, content, messageIndex = null) {
     const rewind = document.createElement("button");
     rewind.type = "button";
     rewind.className = "rewind-action";
-    rewind.textContent = "⏪ Rewind to here";
+    rewind.textContent = "⏪";
+    rewind.title = "Rewind to here";
     rewind.setAttribute("aria-label", `Rewind to after message ${messageIndex + 1}`);
     rewind.disabled = turnInFlight;
     rewind.onclick = () => rewindToMessage(messageIndex);
