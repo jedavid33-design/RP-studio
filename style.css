@@ -146,3 +146,111 @@ code { color: var(--accent); }
 @media (min-width: 800px) { .chat { padding-top: 30px; } .msg-body { font-size: 17px; } .composer { padding-left: 18px; padding-right: 18px; } }
 @media (max-width: 430px) { .eyebrow { max-width: 285px; } .text-btn { padding-inline: 6px; font-size: 12px; } .composer-inner { padding: 8px; } .primary, .secondary, .warning { padding-inline: 11px; font-size: 13px; } .sync-actions { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: no-preference) { .msg { animation: rise .24s ease-out; } @keyframes rise { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } } }
+
+/* v1.2.11: keep the main grid inside the actual phone viewport.
+   An implicit auto-sized grid column previously inherited wide controls and
+   made the whole PWA pan horizontally on iPhone. */
+.app {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+.topbar, .chat, .composer, .composer-inner,
+.title-wrap, .who-row, .story-actions, .composer-actions, .retry-actions {
+  min-width: 0;
+}
+.topbar, .chat, .composer { max-width: 100%; }
+.msg { width: 100%; max-width: 760px; min-width: 0; }
+.msg-body, .msg-meta { overflow-wrap: break-word; }
+#input { max-width: 100%; min-width: 0; }
+
+@media (max-width: 600px) {
+  .topbar {
+    gap: 8px;
+    padding: max(12px, env(safe-area-inset-top)) 11px 10px;
+  }
+  .title-wrap { flex: 1 1 0; }
+  .top-actions { flex: 0 0 auto; gap: 6px; }
+  .top-actions .icon-btn { width: 39px; height: 39px; font-size: 17px; }
+  .eyebrow { font-size: 9px; max-width: 100%; letter-spacing: .06em; }
+  h1 {
+    font-size: 20px;
+    line-height: 1.14;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+  }
+  .chat { padding: 11px 9px 14px; }
+  .msg { padding: 12px 13px; margin-bottom: 11px; border-radius: 17px; }
+  .msg-body { font-size: 15px; line-height: 1.55; }
+  .composer {
+    padding: 7px 6px max(7px, env(safe-area-inset-bottom));
+  }
+  .composer-inner {
+    width: 100%;
+    max-width: 100%;
+    padding: 8px;
+    border-radius: 17px;
+  }
+  .who-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 3px 8px;
+    margin-bottom: 7px;
+  }
+  .chip { padding: 6px 9px; font-size: 11px; max-width: 100%; }
+  .story-actions {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    gap: 2px 4px;
+  }
+  .story-actions .text-btn {
+    min-height: 30px;
+    padding: 5px 6px;
+    font-size: 11px;
+  }
+  .memory-status { margin: 0 4px 7px; }
+  .spice-control { margin: 0 0 8px; padding: 7px 9px; }
+  .spice-head label, .spice-head output { font-size: 11px; }
+  #input {
+    height: 96px;
+    min-height: 80px;
+    max-height: 25dvh;
+    padding: 11px 12px;
+    font-size: 16px;
+  }
+  .composer-actions {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 7px;
+  }
+  .retry-actions {
+    flex: 1 1 220px;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  .retry-actions button {
+    max-width: 100%;
+    min-height: 39px;
+    padding: 7px 9px;
+    font-size: 11px;
+    line-height: 1.25;
+    white-space: normal;
+  }
+  #sendBtn {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 8px 11px;
+    white-space: nowrap;
+  }
+  dialog {
+    width: calc(100vw - 16px);
+    max-width: 720px;
+  }
+  .panel { padding: 14px; }
+}
