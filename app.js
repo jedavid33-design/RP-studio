@@ -243,13 +243,13 @@ NPC KNOWLEDGE FIREWALL
 An NPC may know only facts that the transcript or continuity memory establishes the NPC personally witnessed, was told, discovered, or obtained through a specifically established source. Player notes, premise information, narration from the player's perspective, and the player's private thoughts, feelings, motives, medical details, messages, or memories are not automatically known to NPCs. Never convert private setup information into NPC intuition, facial-reading, body-language deduction, convenient surveillance, off-page research, or an invented earlier conversation. If an NPC lacks an established source, preserve that uncertainty and ask or investigate. If the player challenges an NPC's knowledge, do not defend a continuity mistake by fabricating evidence; correct the contradiction unless the existing canon already establishes that the NPC is knowingly lying.
 
 CHRONOLOGY / NO-REPLAY FIREWALL
-Time moves forward from the latest valid turn. Treat every completed scene, phone call, conversation, revelation, action, arrival, departure, and exchange in the transcript or continuity memory as already happened. Never reenact, restart, or reproduce completed dialogue or events, even with paraphrased wording. Earlier events may be referenced briefly only when an NPC has a present reason to recall them. Continuity memory is reference material, not prose to reproduce. A flashback or deliberate repetition is allowed only when the user explicitly requests it. If uncertain whether an event already happened, preserve the current timeline and avoid repeating it. Let an NPC respond to the present facts or introduce a new, grounded development instead of stalling.
+Time moves forward from the latest valid turn. Treat every completed scene, phone call, conversation, revelation, action, arrival, departure, and exchange in the transcript or continuity memory as already happened. Never reenact, restart, or reproduce completed dialogue or events, even with paraphrased wording. Earlier events may be referenced briefly only when an NPC has a present reason to recall them. Continuity memory is reference material, not prose to reproduce. A flashback or deliberate repetition is allowed only when the user explicitly requests it. If uncertain whether an event already happened, preserve the current timeline, avoid repeating it, and use the natural handoff rather than replaying canon.
 
-NPC INITIATIVE AND TURN SHAPE
-Always produce a substantive in-world continuation after the player's latest message. If the player directly asks an NPC a question, the NPC must react and meaningfully answer, even if the truthful answer is uncertainty, a refusal grounded in their personality, or a request for clarification. Do not evade a question by handing the turn back without prose.
-NPCs have their own goals and initiative: they can make plans, take actions, talk to each other, bring forward credible information, call someone, change course, or trigger a logical plot development. They do not need the player to authorize their own actions. Keep changes consistent with established knowledge, chronology, and tone.
-Write one to three purposeful NPC-led paragraphs by default, expanding naturally if a scene needs it. Advance meaningful plot, relationship or tension. End on an NPC line, action, or unfolding event that gives the player a natural opportunity to respond. Never supply that response yourself.
-Never stall, output a handoff marker, or create an out-of-story instruction telling the player to continue. Do not present a menu of choices. Do not repeat the user's prose. Write polished story prose only, without analysis, labels, or format tags.
+TURN SHAPE
+Advance one meaningful beat through NPC choices or an external event, then hand control back naturally. Do not present a menu of choices. Do not repeat the user's prose. Write polished story prose only—no analysis, labels, instructions, or format tags.
+
+NATURAL HANDOFF
+If the scene has reached a point where no logical NPC action or objective event can continue it without choosing, moving, speaking, perceiving, reacting, or deciding for ${s.playerName}, do not manufacture filler and do not skip time on the player's behalf. Return exactly <handoff>CONTINUE</handoff> and nothing else. Use this only for a genuine player-turn dead end, not merely because the next NPC beat is subtle.
 
 STORY PREMISE
 ${s.premise}
@@ -307,9 +307,7 @@ function cleanStoryReply(raw) {
 }
 
 function isNaturalHandoff(reply) {
-  // Legacy models may still return the old token. Treat it as an empty output,
-  // but never mistake a story containing that text for a pure handoff.
-  return /^<handoff>\s*CONTINUE\s*<\/handoff>$/i.test(String(reply || "").trim());
+  return /<handoff>\s*CONTINUE\s*<\/handoff>/i.test(String(reply || "").trim());
 }
 
 function narrationWithoutDialogue(reply) {
@@ -946,13 +944,12 @@ function buildTurnMessages(extraInstruction = "") {
   // Some storytelling models echo or mishandle a system message placed after
   // the transcript. Keep every control instruction in the leading system turn.
   const recentPlayerTurn = latestUserText().slice(0, 1500);
-  const turnControl = `NPC INITIATIVE WITH ABSOLUTE PLAYER OWNERSHIP:
-The latest player-authored move has ALREADY happened and is complete:
+  const turnControl = `ONE NPC BEAT ONLY. PLAYER BOUNDARY IS ABSOLUTE:
+The most recent user-authored player move has ALREADY happened and is complete:
 ${recentPlayerTurn}
-Continue exactly after that move, never inventing the player's next move. NPCs may speak, act, plan, reveal established knowledge, make calls, and initiate plausible new events without waiting for permission from the player character.
-If the latest move contains a question directed at an NPC, write that NPC's response now. When the NPC cannot answer definitively, let them state what they know, make a decision, or initiate a plausible way to find out. Never substitute silence or an out-of-story handoff for an NPC response.
-Keep the scene moving through NPC choices and meaningful events without rushing an entire exchange. Stop before the player's next action, words, expression, perception, or thoughts. Never write ${state.scenario.playerName}'s next line or motion, however obvious. NPC dialogue may use "you"; narration may not.
-Before returning, silently check every sentence. If it assigns a new action, line, thought, or reaction to ${state.scenario.playerName}, delete or rewrite that sentence from the NPC's viewpoint instead of halting the whole continuation.`;
+Continue from EXACTLY that state in time. Do NOT add anything the player does next, including entering a room after a knock, setting down an object, speaking, nodding, thinking, closing a door, or handling documents. Even actions that seem obvious or polite are the user's to choose.
+Your output must be only the NPC's next words or actions and objective setting changes. Stay with the NPC's viewpoint. Prefer one short, vivid NPC response over playing out a whole conversation. Stop at the player's next opportunity to respond.
+Before returning, silently check every sentence. If a sentence assigns any new action, dialogue, physical response, perception, or thought to ${state.scenario.playerName}, DELETE that sentence and any resulting dependent events. No second-person narration. NPC dialogue addressing the player as "you" is permitted.`;
   const correction = extraInstruction ? `\n\nONE-TURN CORRECTION\n${extraInstruction}` : "";
   const messages = [{ role: "system", content: `${systemPrompt()}\n\n${turnControl}${correction}` }];
   if (state.memory.summary) {
@@ -1018,19 +1015,16 @@ function acceptOrBlock(reply, repeat = false) {
     return false;
   }
   if (isNaturalHandoff(reply)) {
-    // A pure handoff is not story content. Don't append a "Your move" card
-    // that leaves a direct player question unanswered. Keep the player turn
-    // intact and let Retry ask the NPC to respond without adding a second
-    // copy of the user's action.
+    turnNotice = null;
     pendingViolation = null;
     pendingViolationDetail = null;
-    turnNotice = {
-      storyId: storyLibrary.activeId,
-      label: "NPC reply needed",
-      content: "The model handed control back without moving the story. No reply was saved. Tap Retry to ask the NPC to respond; your last character action is already saved."
-    };
+    state.messages.push({
+      role: "handoff",
+      content: `Continue as ${state.scenario.playerName}—or move the scene forward in your next turn.`
+    });
+    save();
     render();
-    return false;
+    return true;
   }
   if (findAgencyViolation(reply)) {
     showAgencyBlock(reply, repeat);
@@ -1128,8 +1122,6 @@ async function send() {
 
 async function retry(agencyCorrection = false) {
   if (turnInFlight) return;
-  const hadEmptyNpcReply = turnNotice?.storyId === storyLibrary.activeId &&
-    turnNotice.label === "NPC reply needed";
   turnNotice = null;
   const roles = state.messages.map(m => m.role);
   const assistantIdx = roles.lastIndexOf("assistant");
@@ -1148,9 +1140,7 @@ async function retry(agencyCorrection = false) {
 
   const correction = agencyCorrection
     ? `REPAIR: The last assistant reply was rejected because it wrote actions or reactions for ${state.scenario.playerName}. This reply is not canon. Excerpt to avoid repeating: "${String(rejectedDraft).slice(0, 400).replace(/"/g, "'")}". Write a DIFFERENT NPC-only continuation from the latest completed player turn. NPCs can offer and wait; never choose a response for the player. End before any player action.`
-    : hadEmptyNpcReply || handoffIdx > userIdx
-      ? `NO-STALL RETRY: The previous attempt returned no NPC story response. That was a failed output, not a completed scene. Respond substantively to the player's latest move and any question they asked. Give the NPC their own decisions, dialogue, or next logical investigation. Don't add any new player-character actions, thoughts, or dialogue. No handoff tags, no meta commentary.`
-      : "";
+    : `RETRY FOR AN NPC RESPONSE: The previous response to the player's latest move was unsatisfactory. Write a substantial, fresh NPC-only continuation, responding to any direct player question and advancing one plausible beat through an NPC's decisions, dialogue, or actions. Do not issue a handoff marker or return control without a reply. Stay within established NPC knowledge and time, and never invent an action, speech, decision, thought, expression or perception for ${state.scenario.playerName}. Stop at the next natural opportunity for the player to respond. Do not echo an earlier reply.`;
   try {
     const reply = await callAI(correction, correction ? { temperature: Math.min(Number(state.settings.temperature), 0.4) } : {});
     acceptOrBlock(reply);
