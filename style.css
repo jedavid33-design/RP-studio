@@ -254,3 +254,112 @@ code { color: var(--accent); }
   }
   .panel { padding: 14px; }
 }
+
+/* v1.2.12: compact shared reading and composing layout. Rewind stays available,
+   but no longer takes a separate footer row on each transcript card. */
+.msg {
+  padding: 12px 14px 13px;
+  margin-bottom: 11px;
+}
+.msg-meta {
+  min-height: 25px;
+  padding-right: 43px;
+  margin-bottom: 3px;
+}
+.msg-actions {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.rewind-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  font-size: 17px;
+  border-radius: 11px;
+}
+.chat { padding-bottom: 14px; }
+.composer { padding-top: 6px; }
+.composer-inner { padding: 8px 10px; border-radius: 19px; }
+.who-row { margin-bottom: 5px; }
+.memory-status { margin: -2px 4px 6px; }
+.spice-control {
+  margin: 0 2px 6px;
+  padding: 5px 9px;
+}
+.spice-control input[type="range"] { height: 21px; margin-top: 1px; }
+#input {
+  height: 76px;
+  min-height: 72px;
+  max-height: 30dvh;
+  padding: 11px 13px;
+  resize: vertical;
+  font-size: 16px;
+}
+.composer-actions { margin-top: 6px; }
+.retry-actions { gap: 5px; }
+.composer-actions .primary, .composer-actions .secondary, .composer-actions .warning {
+  min-height: 39px;
+  padding: 8px 11px;
+}
+.button-label-short { display: none; }
+
+@media (min-width: 601px) {
+  .spice-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(140px, 220px);
+    align-items: center;
+    column-gap: 12px;
+  }
+  .spice-head { flex-wrap: nowrap; }
+  .spice-control input[type="range"] { margin: 0; }
+  .composer-inner { max-width: 780px; }
+}
+
+@media (max-width: 600px) {
+  .msg { padding: 11px 12px 12px; margin-bottom: 9px; }
+  .msg-meta { min-height: 26px; margin-bottom: 4px; }
+  .msg-actions { top: 7px; right: 9px; }
+  .rewind-action { width: 34px; height: 34px; min-height: 34px; }
+  .chat { padding-top: 9px; padding-bottom: 9px; }
+  .composer { padding: 5px 6px max(6px, env(safe-area-inset-bottom)); }
+  .composer-inner { padding: 7px; border-radius: 16px; }
+  .who-row { margin-bottom: 3px; }
+  .story-actions .text-btn { min-height: 27px; padding: 3px 6px; }
+  .memory-status { margin: 0 3px 5px; }
+  .spice-control { margin: 0 0 6px; padding: 5px 8px; }
+  .spice-control input[type="range"] { height: 19px; margin-top: 0; }
+  #input {
+    height: 72px;
+    min-height: 70px;
+    max-height: 26dvh;
+    padding: 9px 11px;
+    resize: none;
+  }
+  .composer-actions { flex-wrap: nowrap; align-items: center; gap: 5px; }
+  .retry-actions { flex: 1 1 auto; flex-wrap: nowrap; min-width: 0; gap: 4px; }
+  .retry-actions button {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: none;
+    min-height: 38px;
+    padding: 7px 7px;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  #sendBtn { min-height: 38px; padding: 7px 10px; font-size: 12px; }
+  .button-label-full { display: none; }
+  .button-label-short { display: inline; }
+}
+@media (max-width: 360px) {
+  .retry-actions button { padding-inline: 5px; font-size: 10px; }
+  #sendBtn { padding-inline: 8px; }
+}
