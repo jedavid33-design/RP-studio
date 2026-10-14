@@ -1680,16 +1680,28 @@ async function parseStoryImport(file) {
   });
   if (data.kind === "story-blueprint" && (!fields.title?.trim() || !fields.playerName?.trim()))
     throw new Error("Complete blueprints require a title and a player name.");
+  // A blueprint may include a finished opening NPC scene to seed the story timeline.
+  // This is separate from editable Story Setup fields and never applies to writing blocks.
+  const openingScene = data.openingScene;
+  if (openingScene !== undefined) {
+    if (data.kind !== "story-blueprint")
+      throw new Error("Only full story blueprints may include an opening scene.");
+    if (typeof openingScene !== "string" || !openingScene.trim() || openingScene.length > 10000)
+      throw new Error("The opening scene must be nonempty text no longer than 10,000 characters.");
+  }
   return {
     kind: data.kind,
     name: String(data.name || "Story import").slice(0, 100),
-    fields, append: data.kind === "story-block" && data.apply === "append"
+    fields,
+    openingScene: openingScene ? openingScene.trim() : "",
+    append: data.kind === "story-block" && data.apply === "append"
   };
 }
 function storyImportFields(fields) {
   return Object.keys(fields).map(key => IMPORT_LABELS[key]).join(", ");
 }
-// Full blueprints create an isolated, empty story, never replace the active one.
+// Full blueprints create an isolated story, optionally with a first NPC message.
+// They never replace an existing story or its transcript.
 async function importStoryBlueprint(file) {
   if (!file) return;
   try {
@@ -1697,9 +1709,11 @@ async function importStoryBlueprint(file) {
     const doc = await parseStoryImport(file);
     if (doc.kind !== "story-blueprint")
       throw new Error("This is a single writing block. Import it from Edit story instead.");
-    if (!confirm(`Create a NEW story from "${doc.name}"? Importing: ${storyImportFields(doc.fields)}. Existing stories and transcripts will remain unchanged.`)) return;
+    const openingNote = doc.openingScene ? " An opening scene will appear as the first AI message." : "";
+    if (!confirm(`Create a NEW story from "${doc.name}"? Importing: ${storyImportFields(doc.fields)}.${openingNote} Existing stories and transcripts will remain unchanged.`)) return;
     const id = makeId(), now = new Date().toISOString();
-    const story = makeStory({ ...defaults.scenario, ...doc.fields });
+    const openingMessages = doc.openingScene ? [{ role: "assistant", content: doc.openingScene }] : [];
+    const story = makeStory({ ...defaults.scenario, ...doc.fields }, openingMessages);
     const candidate = {
       ...storyLibrary, activeId: id,
       stories: { ...storyLibrary.stories, [id]: { ...story, updatedAt: now } },
@@ -1718,7 +1732,9 @@ async function importStoryBlueprint(file) {
     $("libraryDialog").close();
     scheduleCloudPush();
     render();
-    alert("New story imported! Your earlier story is still in the Story Library.");
+    alert(doc.openingScene
+      ? "Story imported with its opening scene. Continue as your character! Your earlier story is still in the Story Library."
+      : "New story imported! Your earlier story is still in the Story Library.");
   } catch(error) { alert("Blueprint import: " + error.message); }
   finally { $("importBlueprintFile").value = ""; }
 }
