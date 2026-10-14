@@ -311,22 +311,32 @@ function isNaturalHandoff(reply) {
 }
 
 function narrationWithoutDialogue(reply) {
-  // Preserve line breaks and character positions while removing quoted speech.
-  // This tolerates straight, curly, multiline, and partially unmatched quotes.
+  // Ignore speech, not narration. NPCs may address the player as "you".
+  // Support double, curly and single-quoted dialogue, while keeping
+  // contractions and possessives (e.g., "don't" and "Matteo's") intact.
   const input = String(reply || "");
   let output = "";
   let closingQuote = "";
-  for (const char of input) {
+  const word = char => /[\p{L}\p{N}]/u.test(char || "");
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    const prev = input[i - 1] || "";
+    const next = input[i + 1] || "";
+    const innerApostrophe = (char === "'" || char === "’") && word(prev) && word(next);
     if (closingQuote) {
-      if (char === closingQuote) closingQuote = "";
+      if (char === closingQuote && !innerApostrophe) closingQuote = "";
       output += char === "\n" ? "\n" : " ";
-      continue;
-    }
-    if (char === "“" || char === "„") {
+    } else if (char === "“" || char === "„") {
       closingQuote = "”";
       output += " ";
-    } else if (char === "\"") {
-      closingQuote = "\"";
+    } else if (char === '"') {
+      closingQuote = '"';
+      output += " ";
+    } else if (char === "‘") {
+      closingQuote = "’";
+      output += " ";
+    } else if (char === "'" && !word(prev) && next && !/\s/.test(next)) {
+      closingQuote = "'";
       output += " ";
     } else {
       output += char;
@@ -928,10 +938,13 @@ function buildTurnMessages(extraInstruction = "") {
   const recent = state.messages.slice(Math.min(state.memory.through, state.messages.length));
   // Some storytelling models echo or mishandle a system message placed after
   // the transcript. Keep every control instruction in the leading system turn.
-  const turnControl = `NPC-ONLY HANDOFF: The player exclusively controls ${state.scenario.playerName}. Every new sentence must describe an NPC or the setting, not the player's words, actions, expressions, thoughts, feelings, or choices. Prior assistant-written player actions are not examples to copy.
-Allowed: "Matteo offered his hand and waited."
-Forbidden: "${state.scenario.playerName} took it and smiled."
-Even during emotional scenes, end the NPC beat before ${state.scenario.playerName} reacts. Do not narrate in second person. Do not reuse these examples.`;
+  const recentPlayerTurn = latestUserText().slice(0, 1500);
+  const turnControl = `ONE NPC BEAT ONLY. PLAYER BOUNDARY IS ABSOLUTE:
+The most recent user-authored player move has ALREADY happened and is complete:
+${recentPlayerTurn}
+Continue from EXACTLY that state in time. Do NOT add anything the player does next, including entering a room after a knock, setting down an object, speaking, nodding, thinking, closing a door, or handling documents. Even actions that seem obvious or polite are the user's to choose.
+Your output must be only the NPC's next words or actions and objective setting changes. Stay with the NPC's viewpoint. Prefer one short, vivid NPC response over playing out a whole conversation. Stop at the player's next opportunity to respond.
+Before returning, silently check every sentence. If a sentence assigns any new action, dialogue, physical response, perception, or thought to ${state.scenario.playerName}, DELETE that sentence and any resulting dependent events. No second-person narration. NPC dialogue addressing the player as "you" is permitted.`;
   const correction = extraInstruction ? `\n\nONE-TURN CORRECTION\n${extraInstruction}` : "";
   const messages = [{ role: "system", content: `${systemPrompt()}\n\n${turnControl}${correction}` }];
   if (state.memory.summary) {
