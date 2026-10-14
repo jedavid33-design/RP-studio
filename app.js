@@ -1128,6 +1128,8 @@ async function send() {
 
 async function retry(agencyCorrection = false) {
   if (turnInFlight) return;
+  const hadEmptyNpcReply = turnNotice?.storyId === storyLibrary.activeId &&
+    turnNotice.label === "NPC reply needed";
   turnNotice = null;
   const roles = state.messages.map(m => m.role);
   const assistantIdx = roles.lastIndexOf("assistant");
@@ -1146,7 +1148,9 @@ async function retry(agencyCorrection = false) {
 
   const correction = agencyCorrection
     ? `REPAIR: The last assistant reply was rejected because it wrote actions or reactions for ${state.scenario.playerName}. This reply is not canon. Excerpt to avoid repeating: "${String(rejectedDraft).slice(0, 400).replace(/"/g, "'")}". Write a DIFFERENT NPC-only continuation from the latest completed player turn. NPCs can offer and wait; never choose a response for the player. End before any player action.`
-    : "";
+    : hadEmptyNpcReply || handoffIdx > userIdx
+      ? `NO-STALL RETRY: The previous attempt returned no NPC story response. That was a failed output, not a completed scene. Respond substantively to the player's latest move and any question they asked. Give the NPC their own decisions, dialogue, or next logical investigation. Don't add any new player-character actions, thoughts, or dialogue. No handoff tags, no meta commentary.`
+      : "";
   try {
     const reply = await callAI(correction, correction ? { temperature: Math.min(Number(state.settings.temperature), 0.4) } : {});
     acceptOrBlock(reply);
