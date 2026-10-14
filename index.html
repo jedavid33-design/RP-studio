@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.2.11" />
+  <link rel="stylesheet" href="style.css?v=1.2.12" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -33,7 +33,7 @@
     </div>
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.2.11 · PRIVATE CLOUD SYNC</div>
+        <div class="eyebrow">RP STUDIO · v1.2.12 · PRIVATE CLOUD SYNC</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
@@ -63,8 +63,8 @@
         <div class="composer-actions">
           <div class="retry-actions">
             <button id="retryBtn" class="secondary" disabled>↻ Retry</button>
-            <button id="hijackBtn" class="warning" disabled>Hands off Olivia</button>
-            <button id="continuityBtn" class="secondary" disabled>Continuity error</button>
+            <button id="hijackBtn" class="warning" aria-label="Hands off Olivia" disabled><span class="button-label-full">Hands off Olivia</span><span class="button-label-short" aria-hidden="true">Hands off</span></button>
+            <button id="continuityBtn" class="secondary" aria-label="Continuity error" disabled><span class="button-label-full">Continuity error</span><span class="button-label-short" aria-hidden="true">Continuity</span></button>
           </div>
           <button id="sendBtn" class="primary">Send <span aria-hidden="true">➜</span></button>
         </div>
@@ -201,6 +201,6 @@
   </dialog>
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
-  <script src="app.js?v=1.2.10"></script>
+  <script src="app.js?v=1.2.12"></script>
 </body>
 </html>
