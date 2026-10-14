@@ -122,6 +122,8 @@ cloudSync = {
 };
 const syncRuntime = { ready: false, busy: false, timer: null };
 let turnInFlight = false;
+// Non-canon, per-device request feedback. Never mix API errors into the story transcript.
+let turnNotice = null;
 let editingProfileId = null;
 storyLibrary.updatedAt = storyLibrary.updatedAt || Object.values(storyLibrary.stories)
   .map(story => story.updatedAt || "")
@@ -460,6 +462,9 @@ function render() {
       m.content,
       index
     ));
+  }
+  if (turnNotice?.storyId === storyLibrary.activeId) {
+    appendVisual("system", turnNotice.label, turnNotice.content);
   }
   const lastUser = state.messages.map(m => m.role).lastIndexOf("user");
   const lastAssistant = state.messages.map(m => m.role).lastIndexOf("assistant");
@@ -936,8 +941,17 @@ Even during emotional scenes, end the NPC beat before ${state.scenario.playerNam
     });
   }
 
-  recent.filter(message => message.role === "user" || message.role === "assistant")
-    .forEach(message => messages.push(message));
+  const storyTurns = recent.filter(message => message.role === "user" || message.role === "assistant");
+  // Imported opening scenes start the transcript with an NPC turn. Some chat
+  // providers reject a first assistant role. Add a model-only user prelude so
+  // the real opening and player move retain their original, immutable roles.
+  if (storyTurns[0]?.role === "assistant") {
+    messages.push({
+      role: "user",
+      content: "SETUP CONTEXT ONLY: The following assistant message is a completed NPC scene, not a new event to replay. Continue after the player’s latest action. This setup note is not an action or dialogue by the player character."
+    });
+  }
+  storyTurns.forEach(message => messages.push(message));
   return messages;
 }
 
@@ -967,6 +981,7 @@ function showAgencyBlock(reply, repeat = false) {
 }
 
 function acceptReply(reply) {
+  turnNotice = null;
   state.messages.push({ role: "assistant", content: reply });
   save();
   render();
@@ -977,12 +992,12 @@ function acceptOrBlock(reply, repeat = false) {
     // An empty completion (or a reply made only of stripped tags) must never
     // become a blank story card. Treat it like a generation error instead:
     // nothing is saved, and the user can retry the turn.
-    appendVisual("system", "Empty reply", "The model returned an empty reply, so nothing was added to the story. Retry the turn to try again.");
-    $("chat").scrollTop = $("chat").scrollHeight;
+    turnNotice = { storyId: storyLibrary.activeId, label: "Empty reply", content: "The model returned an empty reply, so nothing was added to the story. Jace’s move is saved. Tap Retry to request Matteo’s reply again." };
     render();
     return false;
   }
   if (isNaturalHandoff(reply)) {
+    turnNotice = null;
     pendingViolation = null;
     pendingViolationDetail = null;
     state.messages.push({
@@ -1053,11 +1068,22 @@ function setTurnInFlight(on) {
   document.querySelectorAll(".rewind-action").forEach(button => { button.disabled = on; });
 }
 
+function showTurnFailure(err) {
+  const detail = String(err?.message || "The AI request failed.").trim();
+  turnNotice = {
+    storyId: storyLibrary.activeId,
+    label: "AI reply failed",
+    content: `${detail}\n\nYour character’s move is saved. Tap Retry to request the missing AI reply. Do not send your character’s action a second time.`
+  };
+  render();
+}
+
 async function send() {
   if (turnInFlight) return;
   const text = $("input").value.trim();
   if (!text) return;
 
+  turnNotice = null;
   setTurnInFlight(true);
   $("sendBtn").textContent = "Writing…";
   try {
@@ -1068,7 +1094,7 @@ async function send() {
     const reply = await callAI();
     acceptOrBlock(reply);
   } catch (err) {
-    appendVisual("system", "Error", err.message);
+    showTurnFailure(err);
   } finally {
     setTurnInFlight(false);
     $("sendBtn").textContent = "Send ➜";
@@ -1078,6 +1104,7 @@ async function send() {
 
 async function retry(agencyCorrection = false) {
   if (turnInFlight) return;
+  turnNotice = null;
   const roles = state.messages.map(m => m.role);
   const assistantIdx = roles.lastIndexOf("assistant");
   const handoffIdx = roles.lastIndexOf("handoff");
@@ -1100,7 +1127,7 @@ async function retry(agencyCorrection = false) {
     const reply = await callAI(correction, correction ? { temperature: Math.min(Number(state.settings.temperature), 0.4) } : {});
     acceptOrBlock(reply);
   } catch (err) {
-    appendVisual("system", "Error", err.message);
+    showTurnFailure(err);
   } finally {
     setTurnInFlight(false);
     const finalRoles = state.messages.map(m => m.role);
