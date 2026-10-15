@@ -8,6 +8,7 @@
   const POLL = 5000;
   const DEVICE_KEY = "rp.timeLimit.device.v1";
   const LOCAL_KEY = "rp.timeLimit.usage.v1";
+  const BOUND_KEY = "rp.timeLimit.originalSync.v1";
   const ctx = {
     mode: "loading", reason: "", id: "", key: null, day: "", device: "",
     localMs: 0, othersMs: 0, lastTick: Date.now(), lastActivity: Date.now(),
@@ -160,6 +161,8 @@
       const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", input));
       if (generation !== ctx.generation) return;
       ctx.id = encodeBase64Url(digest);
+      const bound = storageGet(BOUND_KEY);
+      if (bound && bound !== ctx.id) throw new Error("This device’s time allowance is bound to its original sync code. Restore the original code to continue.");
       ctx.key = material.key;
       resetLocalForDay(easternDay());
       await syncOnce();
@@ -239,7 +242,10 @@
           (sum, [id, value]) => sum + (id === ctx.device ? 0 : value), 0);
         if (total() >= LIMIT) setMode("limit");
         else setMode("ready");
-        if (!data.missing && !newDay && ctx.localMs <= remoteOwn) return;
+        if (!data.missing && !newDay && ctx.localMs <= remoteOwn) {
+          if (!storageGet(BOUND_KEY)) storageSet(BOUND_KEY, ctx.id);
+          return;
+        }
         usage[ctx.device] = Math.ceil(ctx.localMs);
         const ciphertext = await encrypt({
           app: "RP Studio active time", version: 1, day: ctx.day, usage
@@ -247,6 +253,7 @@
         try {
           await cloudFetch("PUT", { baseRevision: Number(data.revision || 0), ciphertext });
           if (generation !== ctx.generation) return;
+          if (!storageGet(BOUND_KEY)) storageSet(BOUND_KEY, ctx.id);
           return;
         } catch (error) {
           if (error.status === 409) continue; // CAS conflict: reread and merge both devices
@@ -301,6 +308,12 @@
   window.addEventListener("pagehide", () => {
     recordElapsed();
     ctx.visible = false;
+  });
+  window.addEventListener("pageshow", () => {
+    ctx.visible = !document.hidden;
+    ctx.lastTick = Date.now();
+    ctx.lastActivity = ctx.lastTick;
+    void syncOnce();
   });
   setInterval(() => {
     recordElapsed();
