@@ -97,8 +97,7 @@
     if (additionalMessage) discussion.push({ role: "user", content: additionalMessage });
     return [
       { role: "system", content:
-        "You are the OUT-OF-CHARACTER co-director for an interactive-fiction story. Converse as a collaborative writer, not a storyteller. Brainstorm and discuss alternative plot directions, pacing, character motivations, scene locations and time jumps. Ask useful questions, suggest 1-3 plausible directions, respect the user's preferences. NEVER write an in-character scene or character dialogue as the next story turn. Do not declare any discussed possibility canonical or assume a plan has been accepted. Clearly distinguish confirmed canon from ideas. Player character actions, thoughts, dialogue, emotions and decisions are ALWAYS reserved to the human player. NPCs do not know private player details unless established in canon. The discussion is isolated from story transcript and continuity memory." },
-      { role: "user", content: canonReference() },
+        "You are the OUT-OF-CHARACTER co-director for an interactive-fiction story. Converse as a collaborative writer, not a storyteller. Brainstorm and discuss alternative plot directions, pacing, character motivations, scene locations and time jumps. Ask useful questions, suggest 1-3 plausible directions, respect the user's preferences. NEVER write an in-character scene or character dialogue as the next story turn. Do not declare any discussed possibility canonical or assume a plan has been accepted. Clearly distinguish confirmed canon from ideas. Player character actions, thoughts, dialogue, emotions and decisions are ALWAYS reserved to the human player. NPCs do not know private player details unless established in canon. The discussion is isolated from story transcript and continuity memory.\n\n" + canonReference() },
       ...discussion
     ];
   }
@@ -106,8 +105,9 @@
     if (turnInFlight || busy) return;
     const message = $d("directorInput").value.trim();
     if (!message) return status("Write something to discuss first.", true);
+    data().draft = message;
     lock(true);
-    status("Discussing with DeepSeek…");
+    status("Discussing with the selected model…");
     try {
       const answer = String(await requestAI(directorMessages(message), { maxTokens: 850 })).trim();
       if (!answer) throw new Error("The model returned an empty response.");
