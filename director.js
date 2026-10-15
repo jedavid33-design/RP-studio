@@ -217,6 +217,12 @@
     save();
   });
   $d("directorInput").addEventListener("change", () => { if (!busy) { data().draft = $d("directorInput").value.slice(0, 4000); save(); } });
+  $d("directorDirection").addEventListener("input", () => {
+    if (busy) return;
+    const typed = $d("directorDirection").value.slice(0, 4000);
+    data().direction = typed;
+    $d("directorStartBtn").disabled = !typed.trim();
+  });
   $d("directorDirection").addEventListener("change", () => { if (!busy) { data().direction = $d("directorDirection").value.slice(0, 4000); save(); renderDirector(); } });
   $d("directorInput").addEventListener("keydown", e => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); discuss(); }
