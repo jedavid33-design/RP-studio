@@ -131,3 +131,9 @@ AI request failures and empty replies now remain visible in a non-canon error ca
 For blueprints preloaded with an opening AI/NPC message, the request builder prepends a model-only setup user turn before that first assistant turn. This improves compatibility with models that require conversations to begin with a user message, without adding dialogue or actions for the player character. Existing imported stories do not need to be reimported. No Worker changes.
 
 On additional devices, encrypted cloud sync copies stories and model preferences but **not** the per-device Worker URL or app password. Configure those separately in Settings if AI requests fail after syncing.
+
+## Director Mode (v1.2.15)
+
+The compact 🎬 Director button opens an out-of-character, per-story planning panel. Discuss with the currently selected OpenRouter model, or write a direct next-scene plan. **Discuss** and **Use discussion as plan** each cost one model request. A saved plan alone costs nothing and never alters canon. **Start scene** uses one request and writes only an NPC/environment opening after agency validation; player actions, thoughts, speech, movements and knowledge remain under the existing firewall.
+
+Director discussion, drafts, plans, and last applied direction are saved per story and included in backups and encrypted cloud sync. Only an explicitly started, validated scene enters the roleplay transcript. Rewinding snapshots the prior director data but resets it on the new branch to prevent planning from a discarded future leaking into canon. The frontend adds `director.js`; the Worker needs no change.

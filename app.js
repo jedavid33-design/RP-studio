@@ -19,6 +19,7 @@ const defaults = {
     boundaryNotes: "All characters are adults. Respect consent. Do not decide the player's choices for them."
   },
   messages: [],
+  director: { messages: [], direction: "", draft: "", lastApplied: "" },
   memory: {
     summary: "",
     through: 0
@@ -26,11 +27,23 @@ const defaults = {
 };
 
 const makeId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-const makeStory = (scenario = defaults.scenario, messages = [], memory = defaults.memory, guardLessons = []) => ({
+
+function normalizeDirector(value) {
+  const d = value && typeof value === "object" ? value : {};
+  return {
+    messages: Array.isArray(d.messages) ? d.messages.filter(m => m && ["user", "assistant"].includes(m.role) && typeof m.content === "string").slice(-100) : [],
+    direction: typeof d.direction === "string" ? d.direction.slice(0, 4000) : "",
+    draft: typeof d.draft === "string" ? d.draft.slice(0, 4000) : "",
+    lastApplied: typeof d.lastApplied === "string" ? d.lastApplied.slice(0, 4000) : ""
+  };
+}
+
+const makeStory = (scenario = defaults.scenario, messages = [], memory = defaults.memory, guardLessons = [], director = defaults.director) => ({
   scenario: { ...defaults.scenario, ...scenario },
   messages: Array.isArray(messages) ? messages : [],
   memory: { ...defaults.memory, ...memory },
   guardLessons: Array.isArray(guardLessons) ? [...guardLessons] : [],
+  director: normalizeDirector(director),
   updatedAt: new Date().toISOString()
 });
 
@@ -103,6 +116,7 @@ let state = {
   ...storyLibrary.stories[storyLibrary.activeId]
 };
 state.guardLessons = Array.isArray(state.guardLessons) ? state.guardLessons : [];
+state.director = normalizeDirector(state.director);
 let pendingViolation = null;
 let pendingViolationDetail = null;
 function clearPendingViolation() {
@@ -173,6 +187,7 @@ function save(options = {}) {
     messages: state.messages,
     memory: state.memory,
     guardLessons: state.guardLessons,
+    director: normalizeDirector(state.director),
     updatedAt: now
   };
   storyLibrary.updatedAt = now;
@@ -196,7 +211,7 @@ function activateStory(id) {
   save();
   storyLibrary.activeId = id;
   const story = storyLibrary.stories[id];
-  state = { settings: state.settings, scenario: { ...story.scenario }, messages: [...story.messages], memory: { ...story.memory }, guardLessons: Array.isArray(story.guardLessons) ? [...story.guardLessons] : [] };
+  state = { settings: state.settings, scenario: { ...story.scenario }, messages: [...story.messages], memory: { ...story.memory }, guardLessons: Array.isArray(story.guardLessons) ? [...story.guardLessons] : [], director: normalizeDirector(story.director) };
   save();
   render();
 }
@@ -520,6 +535,7 @@ function rewindToMessage(index) {
     scenario: { ...state.scenario },
     messages: state.messages.map(m => ({ ...m })),
     memory: { ...state.memory }, guardLessons: [...state.guardLessons],
+    director: normalizeDirector(state.director),
     draft: $("input").value
   };
   const nextMessages = state.messages.slice(0, kept).map(m => ({ ...m }));
@@ -532,7 +548,7 @@ function rewindToMessage(index) {
       [storyLibrary.activeId]: {
         ...storyLibrary.stories[storyLibrary.activeId],
         scenario: { ...state.scenario }, messages: nextMessages,
-        memory: nextMemory, guardLessons: [], updatedAt: now
+        memory: nextMemory, guardLessons: [], director: normalizeDirector(null), updatedAt: now
       }
     },
     updatedAt: now
@@ -542,6 +558,7 @@ function rewindToMessage(index) {
   state.messages = nextMessages;
   state.memory = nextMemory;
   state.guardLessons = [];
+  state.director = normalizeDirector(null);
   $("input").value = "";
   render();
 }
@@ -556,7 +573,8 @@ function restoreRewindSnapshot(snapshotId) {
     { ...defaults.scenario, ...(snapshot.scenario || {}), title: `${snapshot.title || "Untitled Story"} (restored rewind)` },
     snapshot.messages.map(m => ({ ...m })),
     { ...defaults.memory, ...(snapshot.memory || {}) },
-    Array.isArray(snapshot.guardLessons) ? snapshot.guardLessons : []
+    Array.isArray(snapshot.guardLessons) ? snapshot.guardLessons : [],
+    snapshot.director
   );
   const candidate = {
     ...storyLibrary,
@@ -770,10 +788,12 @@ function restoreSession(trashId) {
   if (targetId) {
     storyLibrary.stories[targetId].messages = (entry.messages || []).map(message => ({ ...message }));
     storyLibrary.stories[targetId].memory = { ...(entry.memory || {}) };
+    storyLibrary.stories[targetId].director = normalizeDirector(entry.director);
     storyLibrary.stories[targetId].updatedAt = new Date().toISOString();
     if (targetId === storyLibrary.activeId) {
       state.messages = storyLibrary.stories[targetId].messages.map(message => ({ ...message }));
       state.memory = { ...storyLibrary.stories[targetId].memory };
+      state.director = normalizeDirector(entry.director);
       render();
     }
   } else {
@@ -782,7 +802,8 @@ function restoreSession(trashId) {
       { ...defaults.scenario, title: `${entry.title || "Untitled Story"} (restored)` },
       (entry.messages || []).map(message => ({ ...message })),
       { ...(entry.memory || {}) },
-      []
+      [],
+      entry.director
     );
     activateStory(id);
   }
@@ -822,7 +843,8 @@ function createStory(duplicate = false) {
       { ...state.scenario, title },
       state.messages.map(message => ({ ...message })),
       { ...state.memory },
-      state.guardLessons
+      state.guardLessons,
+      state.director
     );
   } else {
     storyLibrary.stories[id] = makeStory({ ...defaults.scenario, title: "New Story" });
@@ -846,7 +868,7 @@ function deleteStory(id) {
     if (!nextId) { delete story.deletedAt; return; } // UI blocks this; stay safe anyway
     storyLibrary.activeId = nextId;
     const current = storyLibrary.stories[nextId];
-    state = { settings: state.settings, scenario: { ...current.scenario }, messages: [...current.messages], memory: { ...current.memory }, guardLessons: Array.isArray(current.guardLessons) ? [...current.guardLessons] : [] };
+    state = { settings: state.settings, scenario: { ...current.scenario }, messages: [...current.messages], memory: { ...current.memory }, guardLessons: Array.isArray(current.guardLessons) ? [...current.guardLessons] : [], director: normalizeDirector(current.director) };
   }
   save(); render(); renderLibrary();
 }
@@ -1076,7 +1098,7 @@ async function refreshMemory() {
 // memory refresh) so concurrent generations can never interleave transcript
 // order or burn extra API calls. The keyboard shortcut, every turn button, and
 // render()'s button-state logic all respect it.
-const TURN_LOCK_BUTTONS = ["sendBtn", "retryBtn", "hijackBtn", "continuityBtn", "memoryBtn", "repairAgencyBtn", "repairContinuityBtn"];
+const TURN_LOCK_BUTTONS = ["sendBtn", "retryBtn", "hijackBtn", "continuityBtn", "memoryBtn", "repairAgencyBtn", "repairContinuityBtn", "directorOpenBtn"];
 function setTurnInFlight(on) {
   turnInFlight = on;
   TURN_LOCK_BUTTONS.forEach(id => {
@@ -1382,7 +1404,8 @@ function applyCloudPayload(payload) {
     scenario: { ...defaults.scenario, ...(current.scenario || {}) },
     messages: Array.isArray(current.messages) ? current.messages : [],
     memory: { ...defaults.memory, ...(current.memory || {}) },
-    guardLessons: Array.isArray(current.guardLessons) ? current.guardLessons : []
+    guardLessons: Array.isArray(current.guardLessons) ? current.guardLessons : [],
+    director: normalizeDirector(current.director)
   };
   try {
     localStorage.setItem("rp.settings", JSON.stringify(state.settings));
@@ -1826,7 +1849,8 @@ async function importBackup(file) {
       scenario: { ...defaults.scenario, ...(current.scenario || {}) },
       messages: Array.isArray(current.messages) ? current.messages : [],
       memory: { ...defaults.memory, ...(current.memory || {}) },
-      guardLessons: Array.isArray(current.guardLessons) ? current.guardLessons : []
+      guardLessons: Array.isArray(current.guardLessons) ? current.guardLessons : [],
+    director: normalizeDirector(current.director)
     };
     save(); render(); renderLibrary(); $("libraryDialog").close();
     alert("Backup imported successfully.");
@@ -2025,11 +2049,13 @@ $("clearBtn").onclick = () => {
       title: state.scenario.title || "Untitled Story",
       messages: state.messages.map(message => ({ ...message })),
       memory: { ...state.memory },
+      director: normalizeDirector(state.director),
       clearedAt: new Date().toISOString()
     });
   }
   state.messages = [];
   state.memory = { ...defaults.memory };
+  state.director = normalizeDirector(null);
   save();
   render();
 };

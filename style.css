@@ -363,3 +363,40 @@ code { color: var(--accent); }
   .retry-actions button { padding-inline: 5px; font-size: 10px; }
   #sendBtn { padding-inline: 8px; }
 }
+
+/* v1.2.15: optional out-of-character Director Mode. Story composer stays compact. */
+.director-launch { font-weight: 750; color: var(--accent); }
+.director-dialog { width: min(680px, calc(100vw - 20px)); max-width: 680px; max-height: min(90dvh, 850px); }
+.director-dialog::backdrop { background: rgba(26, 18, 36, .53); }
+.director-panel { display: flex; flex-direction: column; min-width: 0; max-height: calc(90dvh - 14px); overflow: hidden; gap: 9px; }
+.director-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; flex: 0 0 auto; }
+.director-tabs button { min-height: 42px; white-space: normal; font-weight: 730; }
+.director-tabs button.active { color: white; background: var(--accent); border-color: var(--accent); }
+.director-dialog section[role="tabpanel"] { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: auto; gap: 8px; }
+.director-dialog section[hidden] { display: none; }
+.director-hint { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.director-label { margin: 2px 0 0 !important; font-weight: 750; font-size: 13px; }
+.director-conversation { flex: 1 1 auto; min-height: 125px; max-height: 45dvh; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: rgba(234, 224, 241, .46); border-radius: 13px; }
+.director-note { align-self: flex-start; max-width: 92%; padding: 9px 11px; border-radius: 13px; background: #fff; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.48; }
+.director-note.user { align-self: flex-end; background: #e9dbf5; }
+.director-note-label { display: block; font-size: 10px; font-weight: 800; color: var(--muted); margin-bottom: 4px; }
+.director-empty { color: var(--muted); text-align: center; margin: auto; font-size: 13px; line-height: 1.55; }
+.director-dialog textarea { width: 100%; max-width: 100%; min-width: 0; flex: 0 0 auto; font-size: 16px; line-height: 1.4; resize: vertical; }
+.director-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.director-actions button { min-height: 40px; flex: 0 1 auto; }
+.director-status { min-height: 18px; font-size: 12px; color: var(--muted); line-height: 1.45; white-space: pre-wrap; }
+.director-status.error { color: #9b365c; }
+.director-applied { font-size: 11px; color: var(--muted); line-height: 1.45; padding: 10px; background: rgba(233, 222, 242, .48); border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+ .director-dialog { width: calc(100vw - 12px); max-width: none; max-height: 94dvh; margin: auto; }
+ .director-panel { padding: 12px; max-height: calc(94dvh - 12px); gap: 8px; }
+ .director-conversation { min-height: 95px; max-height: 40dvh; }
+ .director-actions button { flex: 1 1 auto; font-size: 12px; padding: 8px 9px; }
+ .director-dialog textarea { min-height: 72px; max-height: 28dvh; }
+ .director-label { font-size: 12px; }
+}
+@media (max-width: 360px) {
+ .director-tabs button { font-size: 12px; padding-inline: 5px; }
+ .director-actions { flex-direction: column; }
+ .director-actions button { width: 100%; }
+}

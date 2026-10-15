@@ -33,7 +33,7 @@
     </div>
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.2.14 · PRIVATE CLOUD SYNC</div>
+        <div class="eyebrow">RP STUDIO · v1.2.15 · PRIVATE CLOUD SYNC</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
@@ -46,6 +46,7 @@
         <div class="who-row">
           <span class="chip" id="playerChip">You</span>
           <div class="story-actions">
+            <button class="text-btn director-launch" type="button" id="directorOpenBtn">🎬 Director</button>
             <button class="text-btn" id="memoryBtn">Refresh memory</button>
             <button class="text-btn" id="editScenarioBtn">✦ Edit story</button>
             <button class="text-btn" id="clearBtn">New session</button>
@@ -71,6 +72,40 @@
       </div>
     </section>
   </div>
+
+  <dialog id="directorDialog" class="director-dialog" aria-labelledby="directorTitle">
+    <div class="panel director-panel">
+      <div class="panel-head">
+        <div><div class="modal-kicker">Separate from story canon</div><h2 id="directorTitle">🎬 Director Mode</h2></div>
+        <button type="button" class="icon-btn" id="directorCloseBtn" aria-label="Close Director Mode">✕</button>
+      </div>
+      <div class="director-tabs" role="tablist" aria-label="Director tools">
+        <button type="button" id="directorDiscussTab" class="secondary active" role="tab" aria-selected="true" aria-controls="directorDiscussPane">💬 Discuss</button>
+        <button type="button" id="directorDirectTab" class="secondary" role="tab" aria-selected="false" aria-controls="directorDirectPane">🎯 Direct Scene</button>
+      </div>
+      <section id="directorDiscussPane" role="tabpanel" aria-labelledby="directorDiscussTab">
+        <p class="director-hint">Brainstorm with DeepSeek. Nothing discussed here becomes a story event.</p>
+        <div id="directorConversation" class="director-conversation" role="log" aria-label="Out-of-character planning conversation" aria-live="polite"></div>
+        <label class="director-label" for="directorInput">Your OOC message</label>
+        <textarea id="directorInput" rows="3" maxlength="4000" placeholder="What if we skip to Monday morning? Let's brainstorm…"></textarea>
+        <div class="director-actions">
+          <button type="button" id="directorExtractBtn" class="secondary">Use discussion as plan · 1 request</button>
+          <button type="button" id="directorSendBtn" class="primary">Discuss · 1 request</button>
+        </div>
+      </section>
+      <section id="directorDirectPane" role="tabpanel" aria-labelledby="directorDirectTab" hidden>
+        <p class="director-hint">Write the next scene's time, place, and NPC direction. Save without changing canon, or start when ready.</p>
+        <label class="director-label" for="directorDirection">Next scene direction</label>
+        <textarea id="directorDirection" rows="6" maxlength="4000" placeholder="Jump to Monday morning at the office. Matteo notices something is off, but he still doesn't know Jace's private medical details."></textarea>
+        <div id="directorLastApplied" class="director-applied" hidden></div>
+        <div class="director-actions">
+          <button type="button" id="directorSaveBtn" class="secondary">Save plan · free</button>
+          <button type="button" id="directorStartBtn" class="primary">▶ Start scene · 1 request</button>
+        </div>
+      </section>
+      <div id="directorStatus" class="director-status" role="status" aria-live="polite"></div>
+    </div>
+  </dialog>
 
   <dialog id="settingsDialog">
     <form method="dialog" class="panel">
@@ -201,6 +236,7 @@
   </dialog>
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
-  <script src="app.js?v=1.2.14"></script>
+  <script src="app.js?v=1.2.15"></script>
+  <script src="director.js?v=1.2.15"></script>
 </body>
 </html>
