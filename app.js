@@ -19,7 +19,7 @@ const defaults = {
     boundaryNotes: "All characters are adults. Respect consent. Do not decide the player's choices for them."
   },
   messages: [],
-  director: { messages: [], direction: "", draft: "", lastApplied: "" },
+  director: { messages: [], direction: "", draft: "", lastApplied: "", sceneMessageIndex: -1 },
   memory: {
     summary: "",
     through: 0
@@ -34,7 +34,8 @@ function normalizeDirector(value) {
     messages: Array.isArray(d.messages) ? d.messages.filter(m => m && ["user", "assistant"].includes(m.role) && typeof m.content === "string").slice(-100) : [],
     direction: typeof d.direction === "string" ? d.direction.slice(0, 4000) : "",
     draft: typeof d.draft === "string" ? d.draft.slice(0, 4000) : "",
-    lastApplied: typeof d.lastApplied === "string" ? d.lastApplied.slice(0, 4000) : ""
+    lastApplied: typeof d.lastApplied === "string" ? d.lastApplied.slice(0, 4000) : "",
+    sceneMessageIndex: Number.isInteger(d.sceneMessageIndex) && d.sceneMessageIndex >= 0 ? d.sceneMessageIndex : -1
   };
 }
 
@@ -1150,6 +1151,7 @@ async function retry(agencyCorrection = false) {
   const handoffIdx = roles.lastIndexOf("handoff");
   const userIdx = roles.lastIndexOf("user");
   if (userIdx < 0) return;
+  const retryDirectedScene = Boolean(state.director?.lastApplied) && state.director.sceneMessageIndex === assistantIdx && assistantIdx > userIdx;
   const rejectedDraft = agencyCorrection && assistantIdx > userIdx ? state.messages[assistantIdx].content : "";
   if (assistantIdx > userIdx) {
     state.messages.splice(assistantIdx, 1);
@@ -1164,7 +1166,10 @@ async function retry(agencyCorrection = false) {
     ? `REPAIR: The last assistant reply was rejected because it wrote actions or reactions for ${state.scenario.playerName}. This reply is not canon. Excerpt to avoid repeating: "${String(rejectedDraft).slice(0, 400).replace(/"/g, "'")}". Write a DIFFERENT NPC-only continuation from the latest completed player turn. NPCs can offer and wait; never choose a response for the player. End before any player action.`
     : `RETRY FOR AN NPC RESPONSE: The previous response to the player's latest move was unsatisfactory. Write a substantial, fresh NPC-only continuation, responding to any direct player question and advancing one plausible beat through an NPC's decisions, dialogue, or actions. Do not issue a handoff marker or return control without a reply. Stay within established NPC knowledge and time, and never invent an action, speech, decision, thought, expression or perception for ${state.scenario.playerName}. Stop at the next natural opportunity for the player to respond. Do not echo an earlier reply.`;
   try {
-    const reply = await callAI(correction, correction ? { temperature: Math.min(Number(state.settings.temperature), 0.4) } : {});
+    const options = correction ? { temperature: Math.min(Number(state.settings.temperature), 0.4) } : {};
+    const reply = retryDirectedScene && typeof window.rpDirectorRetry === "function"
+      ? await window.rpDirectorRetry(correction, options)
+      : await callAI(correction, options);
     acceptOrBlock(reply);
   } catch (err) {
     showTurnFailure(err);
