@@ -11,7 +11,7 @@
   const ctx = {
     mode: "loading", reason: "", id: "", key: null, day: "", device: "",
     localMs: 0, othersMs: 0, lastTick: Date.now(), lastActivity: Date.now(),
-    visible: !document.hidden, lastPoll: 0, busy: false, generation: 0
+    visible: !document.hidden, lastPoll: 0, busy: false, generation: 0, connection: ""
   };
 
   const style = document.createElement("style");
@@ -145,6 +145,7 @@
     ctx.visible = !document.hidden;
     ctx.lastPoll = 0;
     ctx.othersMs = 0;
+    ctx.connection = [cloudSync.code, state.settings.workerUrl, state.settings.appPassword].join("|");
     ctx.key = null;
     ctx.id = "";
     setMode("loading");
@@ -264,6 +265,16 @@
 
   const canUse = () => ctx.mode === "ready" && remaining() > 0;
   window.RPTimeLimit = { canUse, refreshConnection: initialize };
+  // Route every generation path (including Director mode) through the same hard gate.
+  if (typeof requestAI === "function") {
+    const unguardedRequestAI = requestAI;
+    requestAI = async function (...args) {
+      if (!canUse()) throw new Error("Daily RP Studio active time is unavailable or exhausted.");
+      const result = await unguardedRequestAI(...args);
+      if (!canUse()) throw new Error("RP Studio reached its daily active-time limit during the reply.");
+      return result;
+    };
+  }
   document.getElementById("rp-time-retry").onclick = () => { void initialize(); };
   document.getElementById("rp-time-setup").onclick = () => {
     if (typeof loadSettingsForm === "function") loadSettingsForm();
@@ -295,6 +306,7 @@
     recordElapsed();
     const configured = cloudSync.enabled && cloudSync.code && state.settings.workerUrl && state.settings.appPassword;
     if (!configured && ctx.mode !== "setup") { void initialize(); return; }
+    if (configured && ctx.connection !== [cloudSync.code, state.settings.workerUrl, state.settings.appPassword].join("|")) { void initialize(); return; }
     if (configured && !ctx.id && ctx.mode === "setup") { void initialize(); return; }
     if (ctx.id && !ctx.busy && Date.now() - ctx.lastPoll >= POLL) void syncOnce();
   }, 1000);
