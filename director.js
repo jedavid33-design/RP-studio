@@ -156,14 +156,15 @@
     renderDirector();
     status(data().direction ? "Scene direction saved. Story canon is unchanged." : "Plan cleared. Story canon is unchanged.");
   }
-  function sceneMessages(plan) {
+  function sceneMessages(plan, correction = "") {
     const recent = state.messages.slice(Math.min(state.memory.through, state.messages.length))
       .filter(m => m.role === "user" || m.role === "assistant");
     const sys = systemPrompt() + "\n\nDIRECTOR-APPROVED SCENE TRANSITION (OVERRIDES ONLY NORMAL IMMEDIATE-TURN TIMING):\n" +
       "The final user message in this request is OUT-OF-CHARACTER direction, never dialogue or an action by " + state.scenario.playerName + ". " +
       "You MAY jump to the specifically requested future time/place, but must not invent an action, arrival, location change, thought, feeling, or decision for the player character. " +
       "Open with a vivid objective setting beat or NPC action/dialogue from the new scene. Do not reenact prior events. NPC knowledge constraints and all player-agency rules remain absolute. " +
-      "Do not explain the transition, show OOC text, or narrate the player. Advance a single meaningful NPC beat and hand control back.";
+      "Do not explain the transition, show OOC text, or narrate the player. Advance a single meaningful NPC beat and hand control back." +
+      (correction ? "\n\nRETRY / HANDS OFF CORRECTION:\n" + correction : "");
     const messages = [{ role: "system", content: sys }];
     if (state.memory.summary) messages.push({ role: "system", content: "ESTABLISHED CANON REFERENCE ONLY:\n" + state.memory.summary });
     if (recent[0]?.role === "assistant") messages.push({ role: "user", content: "PREVIOUS CANON SETUP ONLY: The next assistant message is a completed scene. Never replay it." });
@@ -191,6 +192,7 @@
       }
       const d = data();
       d.lastApplied = plan;
+      d.sceneMessageIndex = state.messages.length - 1;
       d.direction = "";
       save();
       renderDirector();
@@ -200,6 +202,8 @@
       status("Scene not started: " + (e?.message || String(e)), true);
     } finally { lock(false); }
   }
+  window.rpDirectorRetry = async (correction = "", options = {}) =>
+    cleanStoryReply(await requestAI(sceneMessages(data().lastApplied, correction), options));
   $d("directorOpenBtn").onclick = open;
   $d("directorCloseBtn").onclick = close;
   $d("directorDiscussTab").onclick = () => { if (!busy) setTab("discuss"); };
