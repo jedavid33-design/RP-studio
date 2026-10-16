@@ -45,6 +45,8 @@ const makeStory = (scenario = defaults.scenario, messages = [], memory = default
   memory: { ...defaults.memory, ...memory },
   guardLessons: Array.isArray(guardLessons) ? [...guardLessons] : [],
   director: normalizeDirector(director),
+  universeId: "",
+  inWorldDate: "",
   updatedAt: new Date().toISOString()
 });
 
@@ -98,6 +100,7 @@ if (!storyLibrary || !storyLibrary.stories || !Object.keys(storyLibrary.stories)
     trash: { sessions: [], profiles: [] }
   };
 }
+storyLibrary.universes = storyLibrary.universes && typeof storyLibrary.universes === "object" && !Array.isArray(storyLibrary.universes) ? storyLibrary.universes : {};
 storyLibrary.profiles = Array.isArray(storyLibrary.profiles) ? storyLibrary.profiles : [];
 storyLibrary.trash = normalizeTrash(storyLibrary.trash);
 storyLibrary.rewindSnapshots = Array.isArray(storyLibrary.rewindSnapshots) ? storyLibrary.rewindSnapshots : [];
@@ -184,6 +187,9 @@ function save(options = {}) {
   preserveCorruptBootKeys();
   const now = new Date().toISOString();
   storyLibrary.stories[storyLibrary.activeId] = {
+    ...storyLibrary.stories[storyLibrary.activeId],
+    universeId: state.universeId || "",
+    inWorldDate: state.inWorldDate || "",
     scenario: state.scenario,
     messages: state.messages,
     memory: state.memory,
@@ -212,7 +218,7 @@ function activateStory(id) {
   save();
   storyLibrary.activeId = id;
   const story = storyLibrary.stories[id];
-  state = { settings: state.settings, scenario: { ...story.scenario }, messages: [...story.messages], memory: { ...story.memory }, guardLessons: Array.isArray(story.guardLessons) ? [...story.guardLessons] : [], director: normalizeDirector(story.director) };
+  state = { settings: state.settings, scenario: { ...story.scenario }, messages: [...story.messages], memory: { ...story.memory }, guardLessons: Array.isArray(story.guardLessons) ? [...story.guardLessons] : [], director: normalizeDirector(story.director), universeId: story.universeId || "", inWorldDate: story.inWorldDate || "" };
   save();
   render();
 }
@@ -266,6 +272,8 @@ Advance one meaningful beat through NPC choices or an external event, then hand 
 
 NATURAL HANDOFF
 If the scene has reached a point where no logical NPC action or objective event can continue it without choosing, moving, speaking, perceiving, reacting, or deciding for ${s.playerName}, do not manufacture filler and do not skip time on the player's behalf. Return exactly <handoff>CONTINUE</handoff> and nothing else. Use this only for a genuine player-turn dead end, not merely because the next NPC beat is subtle.
+
+${typeof window.rpUniversePrompt === "function" ? window.rpUniversePrompt() : ""}
 
 STORY PREMISE
 ${s.premise}
@@ -537,6 +545,7 @@ function rewindToMessage(index) {
     messages: state.messages.map(m => ({ ...m })),
     memory: { ...state.memory }, guardLessons: [...state.guardLessons],
     director: normalizeDirector(state.director),
+    universeId: state.universeId || "", inWorldDate: state.inWorldDate || "",
     draft: $("input").value
   };
   const nextMessages = state.messages.slice(0, kept).map(m => ({ ...m }));
@@ -544,6 +553,7 @@ function rewindToMessage(index) {
   const candidate = {
     ...storyLibrary,
     rewindSnapshots: [...storyLibrary.rewindSnapshots, snapshot],
+    universes: JSON.parse(JSON.stringify(storyLibrary.universes || {})),
     stories: {
       ...storyLibrary.stories,
       [storyLibrary.activeId]: {
@@ -554,7 +564,10 @@ function rewindToMessage(index) {
     },
     updatedAt: now
   };
+  const quarantined = typeof window.rpUniverseOnRewind === "function"
+    ? window.rpUniverseOnRewind(candidate, storyLibrary.activeId, kept) : 0;
   if (!commitRewindLibrary(candidate)) return;
+  if (quarantined) alert(quarantined + " shared canon record(s) were placed under review because their source scene was rewound. Other story transcripts are unchanged.");
   clearPendingViolation();
   state.messages = nextMessages;
   state.memory = nextMemory;
@@ -577,6 +590,8 @@ function restoreRewindSnapshot(snapshotId) {
     Array.isArray(snapshot.guardLessons) ? snapshot.guardLessons : [],
     snapshot.director
   );
+  restored.universeId = snapshot.universeId || "";
+  restored.inWorldDate = snapshot.inWorldDate || "";
   const candidate = {
     ...storyLibrary,
     activeId: id,
@@ -653,7 +668,7 @@ function renderLibrary() {
       title.textContent = story.scenario.title || "Untitled Story";
       const note = document.createElement("div");
       note.className = "library-card-note";
-      note.textContent = `${story.messages.length} messages${id === storyLibrary.activeId ? " · Current" : ""}`;
+      note.textContent = `${story.messages.length} messages${story.universeId && storyLibrary.universes?.[story.universeId] ? " · 🌐 " + storyLibrary.universes[story.universeId].name : ""}${id === storyLibrary.activeId ? " · Current" : ""}`;
       main.append(title, note);
       const actions = document.createElement("div");
       actions.className = "library-card-actions";
@@ -847,6 +862,8 @@ function createStory(duplicate = false) {
       state.guardLessons,
       state.director
     );
+    storyLibrary.stories[id].universeId = state.universeId || "";
+    storyLibrary.stories[id].inWorldDate = state.inWorldDate || "";
   } else {
     storyLibrary.stories[id] = makeStory({ ...defaults.scenario, title: "New Story" });
   }
@@ -869,7 +886,7 @@ function deleteStory(id) {
     if (!nextId) { delete story.deletedAt; return; } // UI blocks this; stay safe anyway
     storyLibrary.activeId = nextId;
     const current = storyLibrary.stories[nextId];
-    state = { settings: state.settings, scenario: { ...current.scenario }, messages: [...current.messages], memory: { ...current.memory }, guardLessons: Array.isArray(current.guardLessons) ? [...current.guardLessons] : [], director: normalizeDirector(current.director) };
+    state = { settings: state.settings, scenario: { ...current.scenario }, messages: [...current.messages], memory: { ...current.memory }, guardLessons: Array.isArray(current.guardLessons) ? [...current.guardLessons] : [], director: normalizeDirector(current.director), universeId: current.universeId || "", inWorldDate: current.inWorldDate || "" };
   }
   save(); render(); renderLibrary();
 }
@@ -1390,6 +1407,7 @@ function applyCloudPayload(payload) {
     version: Number(incoming.version || 1),
     activeId: incoming.stories[incoming.activeId] ? incoming.activeId : Object.keys(incoming.stories)[0],
     stories: incoming.stories,
+    universes: incoming.universes && typeof incoming.universes === "object" && !Array.isArray(incoming.universes) ? incoming.universes : {},
     profiles: Array.isArray(incoming.profiles) ? incoming.profiles : [],
     rewindSnapshots: Array.isArray(incoming.rewindSnapshots) ? incoming.rewindSnapshots : [],
     trash: normalizeTrash(incoming.trash),
@@ -1410,7 +1428,9 @@ function applyCloudPayload(payload) {
     messages: Array.isArray(current.messages) ? current.messages : [],
     memory: { ...defaults.memory, ...(current.memory || {}) },
     guardLessons: Array.isArray(current.guardLessons) ? current.guardLessons : [],
-    director: normalizeDirector(current.director)
+    director: normalizeDirector(current.director),
+    universeId: current.universeId || "",
+    inWorldDate: current.inWorldDate || ""
   };
   try {
     localStorage.setItem("rp.settings", JSON.stringify(state.settings));
@@ -1841,9 +1861,10 @@ async function importBackup(file) {
     if (!confirm("Import this backup? It will replace the stories and profiles currently saved in this browser. Your connection settings will stay unchanged.")) return;
     clearPendingViolation();
     storyLibrary = {
-      version: 1,
+      version: Number(incoming.version || 1),
       activeId: incoming.stories[incoming.activeId] ? incoming.activeId : Object.keys(incoming.stories)[0],
       stories: incoming.stories,
+      universes: incoming.universes && typeof incoming.universes === "object" && !Array.isArray(incoming.universes) ? incoming.universes : {},
       profiles: Array.isArray(incoming.profiles) ? incoming.profiles : [],
       rewindSnapshots: Array.isArray(incoming.rewindSnapshots) ? incoming.rewindSnapshots : [],
       trash: normalizeTrash(incoming.trash)
@@ -1855,7 +1876,9 @@ async function importBackup(file) {
       messages: Array.isArray(current.messages) ? current.messages : [],
       memory: { ...defaults.memory, ...(current.memory || {}) },
       guardLessons: Array.isArray(current.guardLessons) ? current.guardLessons : [],
-    director: normalizeDirector(current.director)
+    director: normalizeDirector(current.director),
+      universeId: current.universeId || "",
+      inWorldDate: current.inWorldDate || ""
     };
     save(); render(); renderLibrary(); $("libraryDialog").close();
     alert("Backup imported successfully.");
