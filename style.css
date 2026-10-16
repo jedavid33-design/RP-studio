@@ -400,3 +400,11 @@ code { color: var(--accent); }
  .director-actions { flex-direction: column; }
  .director-actions button { width: 100%; }
 }
+
+/* Director: tap an OOC proposal to start its NPC-only scene in the RP. */
+.director-choice-list { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(105,67,125,.2); }
+.director-choice-heading { font-size: 12px; font-weight: 750; color: var(--muted); }
+.director-choice-button { width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; min-height: 44px; font-size: 13px; line-height: 1.35; }
+.director-more-button { align-self: flex-start; min-height: 40px; text-align: left; }
+
+#directorExtractBtn[hidden] { display: none !important; }

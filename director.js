@@ -12,6 +12,57 @@
     el.textContent = message;
     el.classList.toggle("error", error);
   }
+
+  // Keep choices in the OOC transcript so backup and sync preserve the proposal.
+  function visibleDiscussion(text) {
+    return String(text || "").replace(/\s*\[\[SCENE_OPTIONS\]\][\s\S]*?\[\[\/SCENE_OPTIONS\]\]/gi, "").trim();
+  }
+  function directorChoices(text) {
+    const raw = String(text || "");
+    const block = raw.match(/\[\[SCENE_OPTIONS\]\]([\s\S]*?)\[\[\/SCENE_OPTIONS\]\]/i);
+    if (block) return block[1].split(/\r?\n/).map(line => {
+      const m = line.match(/^\s*[1-3]\s*\|\s*([^|]{2,80})\s*\|\s*(.{12,1200})\s*$/);
+      return m ? {label: m[1].trim(), direction: m[2].trim()} : null;
+    }).filter(Boolean).slice(0, 3);
+    // Backwards compatibility for models that provide plain numbered options.
+    const numbered = visibleDiscussion(raw).split(/\r?\n/).map(line => {
+      const m = line.replace(/^\s*[-*]\s*/, "").match(/^\s*(?:\*\*)?(?:Option\s*)?[1-3][.):]\s*(.{12,400})$/i);
+      if (!m) return null;
+      const detail = m[1].replace(/\*\*/g, "").trim();
+      return {label:detail.split(/\s*[—–:]\s*/)[0].slice(0,60),direction:"Start the next scene with NPCs and the environment according to this chosen OOC option: "+detail};
+    }).filter(Boolean);
+    return numbered.length >= 2 ? numbered.slice(0,3) : [];
+  }
+  function renderDirectorChoices(bubble, choiceText) {
+    const choices = directorChoices(choiceText);
+    if (!choices.length) return;
+    const panel = document.createElement("div");
+    panel.className = "director-choice-list";
+    const heading = document.createElement("div");
+    heading.className = "director-choice-heading";
+    heading.textContent = "Choose an option to start in the RP:";
+    panel.appendChild(heading);
+    choices.forEach((choice, i) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "secondary director-choice-button";
+      button.textContent = "▶ " + (i + 1) + ". " + choice.label + " · 1 request";
+      button.disabled = busy;
+      button.onclick = () => { if (!busy) void startScene(choice.direction); };
+      panel.appendChild(button);
+    });
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "text-btn director-more-button";
+    more.textContent = "💬 Discuss more";
+    more.disabled = busy;
+    more.onclick = () => {
+      $d("directorInput").focus();
+      status("Keep discussing; nothing has entered your RP.");
+    };
+    panel.appendChild(more);
+    bubble.appendChild(panel);
+  }
   function setTab(next) {
     tab = next === "direct" ? "direct" : "discuss";
     $d("directorDiscussPane").hidden = tab !== "discuss";
@@ -32,15 +83,17 @@
       empty.textContent = "Your private writers' room. Ask about plot, pacing, or where to go next.";
       transcript.appendChild(empty);
     } else {
-      d.messages.forEach(m => {
+      d.messages.forEach((m, index) => {
         const bubble = document.createElement("div");
         bubble.className = "director-note " + m.role;
         const label = document.createElement("span");
         label.className = "director-note-label";
         label.textContent = m.role === "user" ? "You · OOC" : "AI · Director";
         const body = document.createElement("span");
-        body.textContent = m.content;
+        body.textContent = m.role === "assistant" ? visibleDiscussion(m.content) : m.content;
         bubble.append(label, body);
+        // The newest assistant proposal only; an older plan can be stale.
+        if (m.role === "assistant" && index === d.messages.length - 1) renderDirectorChoices(bubble, m.content);
         transcript.appendChild(bubble);
       });
     }
@@ -97,7 +150,7 @@
     if (additionalMessage) discussion.push({ role: "user", content: additionalMessage });
     return [
       { role: "system", content:
-        "You are the OUT-OF-CHARACTER co-director for an interactive-fiction story. Converse as a collaborative writer, not a storyteller. Brainstorm and discuss alternative plot directions, pacing, character motivations, scene locations and time jumps. Ask useful questions, suggest 1-3 plausible directions, respect the user's preferences. NEVER write an in-character scene or character dialogue as the next story turn. Do not declare any discussed possibility canonical or assume a plan has been accepted. Clearly distinguish confirmed canon from ideas. Player character actions, thoughts, dialogue, emotions and decisions are ALWAYS reserved to the human player. NPCs do not know private player details unless established in canon. The discussion is isolated from story transcript and continuity memory.\n\n" + canonReference() },
+        "You are the OUT-OF-CHARACTER co-director for an interactive-fiction story. Converse as a collaborative writer, not a storyteller. Brainstorm and discuss alternative plot directions, pacing, character motivations, scene locations and time jumps. Ask useful questions, suggest 1-3 plausible directions, respect the user's preferences. NEVER write an in-character scene or character dialogue as the next story turn. Do not declare any discussed possibility canonical or assume a plan has been accepted. Clearly distinguish confirmed canon from ideas. Player character actions, thoughts, dialogue, emotions and decisions are ALWAYS reserved to the human player. NPCs do not know private player details unless established in canon. The discussion is isolated from story transcript and continuity memory. When you offer concrete next-scene choices, explain them naturally and then append exactly this plain-text block with 1-3 options (no markdown fence):\n[[SCENE_OPTIONS]]\n1|Short label|Concrete NPC/environment-only next-scene direction without controlling the player\n2|Another label|Another NPC/environment-only next-scene direction\n[[/SCENE_OPTIONS]]\nIf no next-scene option is appropriate, omit the block. The user can tap a choice to start that scene directly in their RP; the planning discussion itself remains non-canon. Do not presume any option has been selected.\n\n" + canonReference() },
       ...discussion
     ];
   }
@@ -172,9 +225,10 @@
     messages.push({ role: "user", content: "OUT-OF-CHARACTER DIRECTOR INSTRUCTION, NOT A PLAYER TURN:\n" + plan + "\n\nWrite ONLY the new NPC/environment scene opening. Do not choose or describe anything the player character does." });
     return messages;
   }
-  async function startScene() {
+  async function startScene(override = null) {
     if (turnInFlight || busy) return;
-    const plan = $d("directorDirection").value.trim().slice(0, 4000);
+    // Option taps use the same guarded scene-generation path as Direct Scene.
+    const plan = (typeof override === "string" ? override : $d("directorDirection").value).trim().slice(0, 4000);
     if (!plan) return status("Add a scene direction before starting.", true);
     data().direction = plan;
     save();
@@ -199,7 +253,8 @@
       status("Scene started. The agreed opening is now canon.");
       $d("directorDialog").close();
     } catch (e) {
-      status("Scene not started: " + (e?.message || String(e)), true);
+      setTab("direct");
+      status("Scene not started: " + (e?.message || String(e)) + " The selected direction is saved for retry.", true);
     } finally { lock(false); }
   }
   window.rpDirectorRetry = async (correction = "", options = {}) =>

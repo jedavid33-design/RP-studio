@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.2.15" />
+  <link rel="stylesheet" href="style.css?v=1.2.17" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -84,12 +84,12 @@
         <button type="button" id="directorDirectTab" class="secondary" role="tab" aria-selected="false" aria-controls="directorDirectPane">🎯 Direct Scene</button>
       </div>
       <section id="directorDiscussPane" role="tabpanel" aria-labelledby="directorDiscussTab">
-        <p class="director-hint">Brainstorm with DeepSeek. Nothing discussed here becomes a story event.</p>
+        <p class="director-hint">Brainstorm here, then tap a suggested option to start it in the RP, or keep discussing. Planning itself is never canon.</p>
         <div id="directorConversation" class="director-conversation" role="log" aria-label="Out-of-character planning conversation" aria-live="polite"></div>
         <label class="director-label" for="directorInput">Your OOC message</label>
         <textarea id="directorInput" rows="3" maxlength="4000" placeholder="What if we skip to Monday morning? Let's brainstorm…"></textarea>
         <div class="director-actions">
-          <button type="button" id="directorExtractBtn" class="secondary">Use discussion as plan · 1 request</button>
+          <button type="button" id="directorExtractBtn" class="secondary" hidden aria-hidden="true" tabindex="-1">Use discussion as plan · 1 request</button>
           <button type="button" id="directorSendBtn" class="primary">Discuss · 1 request</button>
         </div>
       </section>
@@ -237,7 +237,7 @@
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
   <script src="app.js?v=1.2.15"></script>
-  <script src="director.js?v=1.2.15"></script>
+  <script src="director.js?v=1.2.17"></script>
   <script src="time-limit.js?v=1.2.16"></script>
 </body>
 </html>
