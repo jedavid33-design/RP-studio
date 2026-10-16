@@ -139,7 +139,7 @@
       (state.inWorldDate ? " · In-world " + state.inWorldDate : " · Set an in-world date for timeline filtering");
     el("universeDate").value = state.inWorldDate || "";
     const buttons = ["universeLinkBtn", "universeProposeBtn", "universeSuggestBtn"];
-    for (const id of buttons) el(id).disabled = !u || (id === "universeSuggestBtn" && generating);
+    for (const id of buttons) el(id).disabled = !u || generating;
     el("universeLinkBtn").textContent = !u ? "Link current story" :
       (state.universeId === u.id ? "Unlink current story" : "Link current story");
     el("universeFactCount").textContent = u ?
@@ -194,8 +194,7 @@
       visibility:"private",knownBy:["Sloane Mercer","Mara Bennett"],status:"approved"}));
     universeList()[u.id] = u;
     save();
-    el("universeSelect").value = u.id;
-    renderPanel();
+    ensureList();
     el("universeSelect").value = u.id;
     renderPanel();
     el("universeStatus").textContent = "Port Meridian foundation created. Planned future romance arcs are deliberately not approved canon.";
@@ -206,13 +205,14 @@
   window.rpUniverseOnRewind = (candidate, storyId, keptCount) => {
     let withdrawn = 0;
     for (const u of Object.values(candidate.universes || {})) {
+      let changed = false;
       for (const f of u.facts || []) {
         if (f.sourceStoryId === storyId && Number.isInteger(f.sourceMessageIndex) &&
-            f.sourceMessageIndex >= keptCount && f.status === "approved") {
-          f.status = "review"; f.updatedAt = today(); withdrawn++;
+            f.sourceMessageIndex >= keptCount && ["approved", "proposed"].includes(f.status)) {
+          f.status = "review"; f.updatedAt = today(); withdrawn++; changed = true;
         }
       }
-      if (withdrawn) { u.updatedAt = today(); u.revision = (u.revision || 0) + 1; }
+      if (changed) { u.updatedAt = today(); u.revision = (u.revision || 0) + 1; }
     }
     return withdrawn;
   };
@@ -268,7 +268,7 @@
       universeList()[u.id] = u;
       save();
       el("universeName").value = "";
-      renderPanel();
+      ensureList();
       el("universeSelect").value = u.id;
       renderPanel();
     };
