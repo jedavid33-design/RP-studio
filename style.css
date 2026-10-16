@@ -406,3 +406,5 @@ code { color: var(--accent); }
 .director-choice-heading { font-size: 12px; font-weight: 750; color: var(--muted); }
 .director-choice-button { width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; min-height: 44px; font-size: 13px; line-height: 1.35; }
 .director-more-button { align-self: flex-start; min-height: 40px; text-align: left; }
+
+#directorExtractBtn[hidden] { display: none !important; }
