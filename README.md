@@ -137,3 +137,17 @@ On additional devices, encrypted cloud sync copies stories and model preferences
 The compact 🎬 Director button opens an out-of-character, per-story planning panel. Discuss with the currently selected OpenRouter model, or write a direct next-scene plan. **Discuss** and **Use discussion as plan** each cost one model request. A saved plan alone costs nothing and never alters canon. **Start scene** uses one request and writes only an NPC/environment opening after agency validation; player actions, thoughts, speech, movements and knowledge remain under the existing firewall.
 
 Director discussion, drafts, plans, and last applied direction are saved per story and included in backups and encrypted cloud sync. Only an explicitly started, validated scene enters the roleplay transcript. Rewinding snapshots the prior director data but resets it on the new branch to prevent planning from a discarded future leaking into canon. The frontend adds `director.js`; the Worker needs no change.
+
+## Shared Universes / Canon Hub (v1.3.0)
+
+Story Library → **🌐 Shared universes** creates independent worlds or the **🏒 Build Port Meridian** starter. Link the active story to the selected world, then set its in-world date. Each story retains its own protagonist, private transcript, Director history, and guardrails.
+
+* **Foundation:** Port Meridian supplies public team/agency/character facts plus restricted knowledge about Leo. Future intended developments (Nate's eventual pansexual label, Sloane's future baseball client) are intentionally **not** approved canon.
+* **Canon Inbox:** Add a proposed record by hand for free, or optionally run **Suggest from recent RP** for one AI request. Review each suggestion and explicitly approve it. Only approved, date-appropriate canon appears in related story prompts.
+* **Privacy:** Private entries name exactly who knows them. NPC knowledge rules still apply; the model must not transfer private knowledge to other characters merely because it appears in the reference.
+* **Timeline:** Stories with no in-world date receive undated background facts only. Set and advance the date manually as your story progresses; future-dated facts are withheld.
+* **Rewind:** Approved or pending entries whose source scene was erased are quarantined for review. Other stories' already-written transcripts are never rewritten.
+* **Sync:** World records and story links are included inside the existing end-to-end encrypted library and ordinary JSON backups. **Sync now** safely merges independent edits to separate stories and separate canon records when the common acknowledged library timestamp proves they do not overlap. Conflicting edits to the same record, deletions, profile changes and uncertain histories retain the existing explicit conflict/recovery workflow. No Worker changes.
+* **Director:** OOC discussion includes relevant shared reference facts. Director selections still use the existing protected NPC-only Start Scene path.
+
+**Important:** Canon proposals do not automatically become true; the user approves them. Suggestions cost one model request; normal sharing and displaying canon uses no extra model request, but referenced canon increases ordinary prompt input tokens. Always update/reload RP Studio on both devices before creating world data; old cached clients do not understand this new format.

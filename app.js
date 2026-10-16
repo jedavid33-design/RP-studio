@@ -45,6 +45,8 @@ const makeStory = (scenario = defaults.scenario, messages = [], memory = default
   memory: { ...defaults.memory, ...memory },
   guardLessons: Array.isArray(guardLessons) ? [...guardLessons] : [],
   director: normalizeDirector(director),
+  universeId: "",
+  inWorldDate: "",
   updatedAt: new Date().toISOString()
 });
 
@@ -98,6 +100,7 @@ if (!storyLibrary || !storyLibrary.stories || !Object.keys(storyLibrary.stories)
     trash: { sessions: [], profiles: [] }
   };
 }
+storyLibrary.universes = storyLibrary.universes && typeof storyLibrary.universes === "object" && !Array.isArray(storyLibrary.universes) ? storyLibrary.universes : {};
 storyLibrary.profiles = Array.isArray(storyLibrary.profiles) ? storyLibrary.profiles : [];
 storyLibrary.trash = normalizeTrash(storyLibrary.trash);
 storyLibrary.rewindSnapshots = Array.isArray(storyLibrary.rewindSnapshots) ? storyLibrary.rewindSnapshots : [];
@@ -184,6 +187,9 @@ function save(options = {}) {
   preserveCorruptBootKeys();
   const now = new Date().toISOString();
   storyLibrary.stories[storyLibrary.activeId] = {
+    ...storyLibrary.stories[storyLibrary.activeId],
+    universeId: state.universeId || "",
+    inWorldDate: state.inWorldDate || "",
     scenario: state.scenario,
     messages: state.messages,
     memory: state.memory,
@@ -192,6 +198,7 @@ function save(options = {}) {
     updatedAt: now
   };
   storyLibrary.updatedAt = now;
+  if (Object.keys(storyLibrary.universes || {}).length) storyLibrary.version = Math.max(2, Number(storyLibrary.version || 1));
   try {
     localStorage.setItem("rp.settings", JSON.stringify(state.settings));
     localStorage.setItem("rp.stories", JSON.stringify(storyLibrary));
@@ -212,7 +219,7 @@ function activateStory(id) {
   save();
   storyLibrary.activeId = id;
   const story = storyLibrary.stories[id];
-  state = { settings: state.settings, scenario: { ...story.scenario }, messages: [...story.messages], memory: { ...story.memory }, guardLessons: Array.isArray(story.guardLessons) ? [...story.guardLessons] : [], director: normalizeDirector(story.director) };
+  state = { settings: state.settings, scenario: { ...story.scenario }, messages: [...story.messages], memory: { ...story.memory }, guardLessons: Array.isArray(story.guardLessons) ? [...story.guardLessons] : [], director: normalizeDirector(story.director), universeId: story.universeId || "", inWorldDate: story.inWorldDate || "" };
   save();
   render();
 }
@@ -266,6 +273,8 @@ Advance one meaningful beat through NPC choices or an external event, then hand 
 
 NATURAL HANDOFF
 If the scene has reached a point where no logical NPC action or objective event can continue it without choosing, moving, speaking, perceiving, reacting, or deciding for ${s.playerName}, do not manufacture filler and do not skip time on the player's behalf. Return exactly <handoff>CONTINUE</handoff> and nothing else. Use this only for a genuine player-turn dead end, not merely because the next NPC beat is subtle.
+
+${typeof window.rpUniversePrompt === "function" ? window.rpUniversePrompt() : ""}
 
 STORY PREMISE
 ${s.premise}
@@ -537,6 +546,7 @@ function rewindToMessage(index) {
     messages: state.messages.map(m => ({ ...m })),
     memory: { ...state.memory }, guardLessons: [...state.guardLessons],
     director: normalizeDirector(state.director),
+    universeId: state.universeId || "", inWorldDate: state.inWorldDate || "",
     draft: $("input").value
   };
   const nextMessages = state.messages.slice(0, kept).map(m => ({ ...m }));
@@ -544,6 +554,7 @@ function rewindToMessage(index) {
   const candidate = {
     ...storyLibrary,
     rewindSnapshots: [...storyLibrary.rewindSnapshots, snapshot],
+    universes: JSON.parse(JSON.stringify(storyLibrary.universes || {})),
     stories: {
       ...storyLibrary.stories,
       [storyLibrary.activeId]: {
@@ -554,7 +565,10 @@ function rewindToMessage(index) {
     },
     updatedAt: now
   };
+  const quarantined = typeof window.rpUniverseOnRewind === "function"
+    ? window.rpUniverseOnRewind(candidate, storyLibrary.activeId, kept) : 0;
   if (!commitRewindLibrary(candidate)) return;
+  if (quarantined) alert(quarantined + " shared canon record(s) were placed under review because their source scene was rewound. Other story transcripts are unchanged.");
   clearPendingViolation();
   state.messages = nextMessages;
   state.memory = nextMemory;
@@ -577,6 +591,8 @@ function restoreRewindSnapshot(snapshotId) {
     Array.isArray(snapshot.guardLessons) ? snapshot.guardLessons : [],
     snapshot.director
   );
+  restored.universeId = snapshot.universeId || "";
+  restored.inWorldDate = snapshot.inWorldDate || "";
   const candidate = {
     ...storyLibrary,
     activeId: id,
@@ -653,7 +669,7 @@ function renderLibrary() {
       title.textContent = story.scenario.title || "Untitled Story";
       const note = document.createElement("div");
       note.className = "library-card-note";
-      note.textContent = `${story.messages.length} messages${id === storyLibrary.activeId ? " · Current" : ""}`;
+      note.textContent = `${story.messages.length} messages${story.universeId && storyLibrary.universes?.[story.universeId] ? " · 🌐 " + storyLibrary.universes[story.universeId].name : ""}${id === storyLibrary.activeId ? " · Current" : ""}`;
       main.append(title, note);
       const actions = document.createElement("div");
       actions.className = "library-card-actions";
@@ -847,6 +863,8 @@ function createStory(duplicate = false) {
       state.guardLessons,
       state.director
     );
+    storyLibrary.stories[id].universeId = state.universeId || "";
+    storyLibrary.stories[id].inWorldDate = state.inWorldDate || "";
   } else {
     storyLibrary.stories[id] = makeStory({ ...defaults.scenario, title: "New Story" });
   }
@@ -869,7 +887,7 @@ function deleteStory(id) {
     if (!nextId) { delete story.deletedAt; return; } // UI blocks this; stay safe anyway
     storyLibrary.activeId = nextId;
     const current = storyLibrary.stories[nextId];
-    state = { settings: state.settings, scenario: { ...current.scenario }, messages: [...current.messages], memory: { ...current.memory }, guardLessons: Array.isArray(current.guardLessons) ? [...current.guardLessons] : [], director: normalizeDirector(current.director) };
+    state = { settings: state.settings, scenario: { ...current.scenario }, messages: [...current.messages], memory: { ...current.memory }, guardLessons: Array.isArray(current.guardLessons) ? [...current.guardLessons] : [], director: normalizeDirector(current.director), universeId: current.universeId || "", inWorldDate: current.inWorldDate || "" };
   }
   save(); render(); renderLibrary();
 }
@@ -1390,6 +1408,7 @@ function applyCloudPayload(payload) {
     version: Number(incoming.version || 1),
     activeId: incoming.stories[incoming.activeId] ? incoming.activeId : Object.keys(incoming.stories)[0],
     stories: incoming.stories,
+    universes: incoming.universes && typeof incoming.universes === "object" && !Array.isArray(incoming.universes) ? incoming.universes : {},
     profiles: Array.isArray(incoming.profiles) ? incoming.profiles : [],
     rewindSnapshots: Array.isArray(incoming.rewindSnapshots) ? incoming.rewindSnapshots : [],
     trash: normalizeTrash(incoming.trash),
@@ -1410,7 +1429,9 @@ function applyCloudPayload(payload) {
     messages: Array.isArray(current.messages) ? current.messages : [],
     memory: { ...defaults.memory, ...(current.memory || {}) },
     guardLessons: Array.isArray(current.guardLessons) ? current.guardLessons : [],
-    director: normalizeDirector(current.director)
+    director: normalizeDirector(current.director),
+    universeId: current.universeId || "",
+    inWorldDate: current.inWorldDate || ""
   };
   try {
     localStorage.setItem("rp.settings", JSON.stringify(state.settings));
@@ -1526,6 +1547,81 @@ async function connectCloudSync() {
   }
 }
 
+
+// Merge separate stories and universe records after parallel device edits.
+// Same-record conflicts are NEVER resolved by choosing a silent winner.
+// baseTime is the last acknowledged cloud library timestamp on this device.
+function mergeIndependentLibraries(local, remote, baseTime) {
+  if (!baseTime || !local?.stories || !remote?.stories) return null;
+  const later = stamp => String(stamp || "") > String(baseTime);
+  const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+  const withoutDate = obj => {
+    if (!obj) return obj;
+    const { updatedAt, ...rest } = obj;
+    return rest;
+  };
+  function mergeRecord(a, b, stampField = "updatedAt") {
+    if (!a && !b) return null;
+    if (!a || !b) {
+      const one = a || b;
+      // Do not restore something that may have been explicitly deleted.
+      if (!later(one.createdAt || one[stampField])) throw Error("Deleted or missing shared record");
+      return one;
+    }
+    if (same(withoutDate(a), withoutDate(b))) return later(a[stampField]) ? a : b;
+    const aChanged = later(a[stampField]), bChanged = later(b[stampField]);
+    if (aChanged && !bChanged) return a;
+    if (bChanged && !aChanged) return b;
+    throw Error("Both devices changed the same record");
+  }
+  function mergeMap(l, r) {
+    const result = {};
+    for (const id of new Set([...Object.keys(l || {}), ...Object.keys(r || {})])) {
+      result[id] = mergeRecord(l?.[id],r?.[id]);
+    }
+    return result;
+  }
+  function mergeUniverse(a,b) {
+    if (!a || !b) return mergeRecord(a,b);
+    if (a.name !== b.name || (a.description || "") !== (b.description || "")) {
+      throw Error("Universe settings differ");
+    }
+    const left = Object.fromEntries((a.facts || []).map(f=>[f.id,f]));
+    const right = Object.fromEntries((b.facts || []).map(f=>[f.id,f]));
+    const facts = Object.values(mergeMap(left,right)).sort((x,y)=>
+      String(x.createdAt || "").localeCompare(String(y.createdAt || "")));
+    return {...a, facts, revision:Math.max(Number(a.revision||0),Number(b.revision||0))+1,
+      updatedAt:new Date().toISOString()};
+  }
+  try {
+    // Profiles and deleted-item catalogs remain conservative because their
+    // current schema does not track per-record revisions or tombstones reliably.
+    if (!same(local.profiles||[],remote.profiles||[]) ||
+        !same(local.trash||{},remote.trash||{})) return null;
+    const oldSnaps = Object.fromEntries((local.rewindSnapshots||[]).map(x=>[x.snapshotId,x]));
+    const newSnaps = Object.fromEntries((remote.rewindSnapshots||[]).map(x=>[x.snapshotId,x]));
+    const snapshots = {};
+    for (const id of new Set([...Object.keys(oldSnaps),...Object.keys(newSnaps)])) {
+      const a=oldSnaps[id],b=newSnaps[id];
+      if (a && b && !same(a,b)) return null;
+      if ((!a || !b) && !later((a||b)?.createdAt)) return null;
+      snapshots[id] = a || b;
+    }
+    const stories = mergeMap(local.stories,remote.stories);
+    const universes = {};
+    for (const id of new Set([...Object.keys(local.universes||{}),...Object.keys(remote.universes||{})])) {
+      universes[id] = mergeUniverse(local.universes?.[id],remote.universes?.[id]);
+    }
+    const activeId = stories[local.activeId] ? local.activeId : remote.activeId;
+    return {
+      version:Math.max(2,Number(local.version||1),Number(remote.version||1)),
+      activeId, stories, universes, profiles:local.profiles||[],
+      trash:local.trash||{}, rewindSnapshots:Object.values(snapshots),
+      updatedAt:new Date().toISOString()
+    };
+  } catch { return null; }
+}
+
 async function syncNow() {
   if (!cloudSync.enabled || !cloudSync.code) throw new Error("Create or connect a sync code first.");
   if (syncRuntime.busy) return;
@@ -1535,7 +1631,32 @@ async function syncNow() {
     const remote = await fetchCloudCopy();
     const localDirty = isLocalDirty();
     if (remote.revision > Number(cloudSync.revision || 0)) {
-      if (localDirty && !confirm("This device and the cloud both changed. Press OK to keep the newer cloud copy on this device, or Cancel to keep this device unchanged. Nothing will be overwritten automatically.")) {
+      if (localDirty) {
+        const merged = mergeIndependentLibraries(storyLibrary, remote.payload.library, cloudSync.lastSyncedAt);
+        if (merged) {
+          // Revision-check the merged upload against the remote copy.
+          const previousSyncStamp = cloudSync.lastSyncedAt;
+          const previousRevision = cloudSync.revision;
+          cloudSync.revision = remote.revision;
+          syncRuntime.busy = false;
+          try {
+            applyCloudPayload({ ...remote.payload, library:merged });
+            cloudSync.lastSyncedAt = previousSyncStamp;
+            persistCloudSync();
+            await pushCloudCopy({ allowBeforeReady:true });
+            // The upload is revision checked. In-flight changes on other
+            // devices still yield a 409, never a silent overwrite.
+            return;
+          } catch (error) {
+            cloudSync.revision = previousRevision;
+            cloudSync.lastSyncedAt = previousSyncStamp;
+            persistCloudSync();
+            setSyncStatus("Merged data retained locally; cloud upload needs retry: "+error.message,"error");
+            return;
+          }
+        }
+      }
+      if (localDirty && !confirm("This device and the cloud both changed. Safe merging was not possible. Press OK to use the newer cloud copy here; Cancel preserves this device unchanged. Export both libraries before replacing one.")) {
         if (confirm("Keep this device's copy instead? It will be uploaded to the cloud as the newest version, replacing the cloud copy.")) {
           // Force-push: adopt the remote revision as our base so the PUT no
           // longer 409s, then upload this device's library.
@@ -1841,9 +1962,10 @@ async function importBackup(file) {
     if (!confirm("Import this backup? It will replace the stories and profiles currently saved in this browser. Your connection settings will stay unchanged.")) return;
     clearPendingViolation();
     storyLibrary = {
-      version: 1,
+      version: Number(incoming.version || 1),
       activeId: incoming.stories[incoming.activeId] ? incoming.activeId : Object.keys(incoming.stories)[0],
       stories: incoming.stories,
+      universes: incoming.universes && typeof incoming.universes === "object" && !Array.isArray(incoming.universes) ? incoming.universes : {},
       profiles: Array.isArray(incoming.profiles) ? incoming.profiles : [],
       rewindSnapshots: Array.isArray(incoming.rewindSnapshots) ? incoming.rewindSnapshots : [],
       trash: normalizeTrash(incoming.trash)
@@ -1855,7 +1977,9 @@ async function importBackup(file) {
       messages: Array.isArray(current.messages) ? current.messages : [],
       memory: { ...defaults.memory, ...(current.memory || {}) },
       guardLessons: Array.isArray(current.guardLessons) ? current.guardLessons : [],
-    director: normalizeDirector(current.director)
+    director: normalizeDirector(current.director),
+      universeId: current.universeId || "",
+      inWorldDate: current.inWorldDate || ""
     };
     save(); render(); renderLibrary(); $("libraryDialog").close();
     alert("Backup imported successfully.");
