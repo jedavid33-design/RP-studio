@@ -141,6 +141,7 @@
       "Premise: " + state.scenario.premise,
       "Boundaries: " + state.scenario.boundaryNotes,
       "Continuity established so far: " + (state.memory.summary || "No compressed memory yet."),
+      "Shared universe canon: " + (typeof window.rpUniversePrompt === "function" ? window.rpUniversePrompt() : "Independent story"),
       "Latest CANON transcript, reference only:",
       last.map(m => (m.role === "user" ? "Player" : "NPC") + ": " + m.content.slice(0, 1100)).join("\n\n")
     ].join("\n\n").slice(0, 14500);
