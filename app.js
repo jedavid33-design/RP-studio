@@ -198,6 +198,7 @@ function save(options = {}) {
     updatedAt: now
   };
   storyLibrary.updatedAt = now;
+  if (Object.keys(storyLibrary.universes || {}).length) storyLibrary.version = Math.max(2, Number(storyLibrary.version || 1));
   try {
     localStorage.setItem("rp.settings", JSON.stringify(state.settings));
     localStorage.setItem("rp.stories", JSON.stringify(storyLibrary));
