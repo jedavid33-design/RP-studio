@@ -1546,6 +1546,81 @@ async function connectCloudSync() {
   }
 }
 
+
+// Merge separate stories and universe records after parallel device edits.
+// Same-record conflicts are NEVER resolved by choosing a silent winner.
+// baseTime is the last acknowledged cloud library timestamp on this device.
+function mergeIndependentLibraries(local, remote, baseTime) {
+  if (!baseTime || !local?.stories || !remote?.stories) return null;
+  const later = stamp => String(stamp || "") > String(baseTime);
+  const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+  const withoutDate = obj => {
+    if (!obj) return obj;
+    const { updatedAt, ...rest } = obj;
+    return rest;
+  };
+  function mergeRecord(a, b, stampField = "updatedAt") {
+    if (!a && !b) return null;
+    if (!a || !b) {
+      const one = a || b;
+      // Do not restore something that may have been explicitly deleted.
+      if (!later(one.createdAt || one[stampField])) throw Error("Deleted or missing shared record");
+      return one;
+    }
+    if (same(withoutDate(a), withoutDate(b))) return later(a[stampField]) ? a : b;
+    const aChanged = later(a[stampField]), bChanged = later(b[stampField]);
+    if (aChanged && !bChanged) return a;
+    if (bChanged && !aChanged) return b;
+    throw Error("Both devices changed the same record");
+  }
+  function mergeMap(l, r) {
+    const result = {};
+    for (const id of new Set([...Object.keys(l || {}), ...Object.keys(r || {})])) {
+      result[id] = mergeRecord(l?.[id],r?.[id]);
+    }
+    return result;
+  }
+  function mergeUniverse(a,b) {
+    if (!a || !b) return mergeRecord(a,b);
+    if (a.name !== b.name || (a.description || "") !== (b.description || "")) {
+      throw Error("Universe settings differ");
+    }
+    const left = Object.fromEntries((a.facts || []).map(f=>[f.id,f]));
+    const right = Object.fromEntries((b.facts || []).map(f=>[f.id,f]));
+    const facts = Object.values(mergeMap(left,right)).sort((x,y)=>
+      String(x.createdAt || "").localeCompare(String(y.createdAt || "")));
+    return {...a, facts, revision:Math.max(Number(a.revision||0),Number(b.revision||0))+1,
+      updatedAt:new Date().toISOString()};
+  }
+  try {
+    // Profiles and deleted-item catalogs remain conservative because their
+    // current schema does not track per-record revisions or tombstones reliably.
+    if (!same(local.profiles||[],remote.profiles||[]) ||
+        !same(local.trash||{},remote.trash||{})) return null;
+    const oldSnaps = Object.fromEntries((local.rewindSnapshots||[]).map(x=>[x.snapshotId,x]));
+    const newSnaps = Object.fromEntries((remote.rewindSnapshots||[]).map(x=>[x.snapshotId,x]));
+    const snapshots = {};
+    for (const id of new Set([...Object.keys(oldSnaps),...Object.keys(newSnaps)])) {
+      const a=oldSnaps[id],b=newSnaps[id];
+      if (a && b && !same(a,b)) return null;
+      if ((!a || !b) && !later((a||b)?.createdAt)) return null;
+      snapshots[id] = a || b;
+    }
+    const stories = mergeMap(local.stories,remote.stories);
+    const universes = {};
+    for (const id of new Set([...Object.keys(local.universes||{}),...Object.keys(remote.universes||{})])) {
+      universes[id] = mergeUniverse(local.universes?.[id],remote.universes?.[id]);
+    }
+    const activeId = stories[local.activeId] ? local.activeId : remote.activeId;
+    return {
+      version:Math.max(2,Number(local.version||1),Number(remote.version||1)),
+      activeId, stories, universes, profiles:local.profiles||[],
+      trash:local.trash||{}, rewindSnapshots:Object.values(snapshots),
+      updatedAt:new Date().toISOString()
+    };
+  } catch { return null; }
+}
+
 async function syncNow() {
   if (!cloudSync.enabled || !cloudSync.code) throw new Error("Create or connect a sync code first.");
   if (syncRuntime.busy) return;
@@ -1555,7 +1630,32 @@ async function syncNow() {
     const remote = await fetchCloudCopy();
     const localDirty = isLocalDirty();
     if (remote.revision > Number(cloudSync.revision || 0)) {
-      if (localDirty && !confirm("This device and the cloud both changed. Press OK to keep the newer cloud copy on this device, or Cancel to keep this device unchanged. Nothing will be overwritten automatically.")) {
+      if (localDirty) {
+        const merged = mergeIndependentLibraries(storyLibrary, remote.payload.library, cloudSync.lastSyncedAt);
+        if (merged) {
+          // Revision-check the merged upload against the remote copy.
+          const previousSyncStamp = cloudSync.lastSyncedAt;
+          const previousRevision = cloudSync.revision;
+          cloudSync.revision = remote.revision;
+          syncRuntime.busy = false;
+          try {
+            applyCloudPayload({ ...remote.payload, library:merged });
+            cloudSync.lastSyncedAt = previousSyncStamp;
+            persistCloudSync();
+            await pushCloudCopy({ allowBeforeReady:true });
+            // The upload is revision checked. In-flight changes on other
+            // devices still yield a 409, never a silent overwrite.
+            return;
+          } catch (error) {
+            cloudSync.revision = previousRevision;
+            cloudSync.lastSyncedAt = previousSyncStamp;
+            persistCloudSync();
+            setSyncStatus("Merged data retained locally; cloud upload needs retry: "+error.message,"error");
+            return;
+          }
+        }
+      }
+      if (localDirty && !confirm("This device and the cloud both changed. Safe merging was not possible. Press OK to use the newer cloud copy here; Cancel preserves this device unchanged. Export both libraries before replacing one.")) {
         if (confirm("Keep this device's copy instead? It will be uploaded to the cloud as the newest version, replacing the cloud copy.")) {
           // Force-push: adopt the remote revision as our base so the PUT no
           // longer 409s, then upload this device's library.
