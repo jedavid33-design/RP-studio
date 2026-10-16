@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
-  <link rel="stylesheet" href="style.css?v=1.2.17" />
+  <link rel="stylesheet" href="style.css?v=1.3.0" />
 </head>
 <body>
   <div class="ambient ambient-one"></div>
@@ -33,7 +33,7 @@
     </div>
     <header class="topbar">
       <div class="title-wrap">
-        <div class="eyebrow">RP STUDIO · v1.2.17 · PRIVATE CLOUD SYNC</div>
+        <div class="eyebrow">RP STUDIO · v1.3.0 · PRIVATE CLOUD SYNC</div>
         <h1 id="storyTitle">Story RP Studio</h1>
       </div>
       <div class="top-actions"><button class="icon-btn" id="libraryBtn" aria-label="Story library">📚</button><button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙︎</button></div>
@@ -104,6 +104,46 @@
         </div>
       </section>
       <div id="directorStatus" class="director-status" role="status" aria-live="polite"></div>
+    </div>
+  </dialog>
+
+
+  <dialog id="universeDialog" class="universe-dialog" aria-labelledby="universeTitle">
+    <div class="panel universe-panel">
+      <div class="panel-head">
+        <div><div class="modal-kicker">Shared canon across stories</div><h2 id="universeTitle">🌐 Universes</h2></div>
+        <button type="button" id="universeCloseBtn" class="icon-btn" aria-label="Close universe hub">✕</button>
+      </div>
+      <p class="hint">Approved shared facts appear in linked stories. Plans, private information, and future events stay protected.</p>
+      <label>Choose world <select id="universeSelect"><option value="">Choose a universe…</option></select></label>
+      <div class="universe-controls">
+        <input id="universeName" maxlength="90" placeholder="New universe name" aria-label="New universe name" />
+        <button type="button" id="universeCreateBtn" class="secondary">Create world</button>
+        <button type="button" id="universeStarterBtn" class="secondary">🏒 Build Port Meridian</button>
+      </div>
+      <div id="universeCurrentLink" class="universe-info"></div>
+      <div class="universe-controls">
+        <button type="button" id="universeLinkBtn" class="primary">Link current story</button>
+        <label class="universe-date">Story date <input id="universeDate" type="date" /></label>
+      </div>
+      <p class="hint">Dated events are only supplied to stories whose in-world date is set and has reached them. Use the same date convention across stories.</p>
+      <h3>Propose a canon record</h3>
+      <div class="universe-fields">
+        <label>Subject <input id="universeSubject" maxlength="100" placeholder="Sloane Mercer" /></label>
+        <label>Kind <select id="universeKind"><option value="event">Event</option><option value="person">Character</option><option value="relationship">Relationship</option><option value="organization">Team or organization</option><option value="place">Place</option><option value="other">Other</option></select></label>
+        <label>Effective in-world date (optional) <input id="universeFactDate" type="date" /></label>
+        <label>Visibility <select id="universeVisibility"><option value="public">Public/shared knowledge</option><option value="private">Private/limited knowledge</option></select></label>
+      </div>
+      <label id="universeKnownByWrap">Who knows? (comma-separated names)<input id="universeKnownBy" placeholder="Sloane Mercer, Mara Bennett" maxlength="1000" /></label>
+      <label>Established fact or completed event<textarea id="universeFactText" rows="3" maxlength="1400" placeholder="Write only what actually happened. Future plans are not canon."></textarea></label>
+      <div class="universe-controls">
+        <button id="universeProposeBtn" type="button" class="primary">Propose · free</button>
+        <button id="universeSuggestBtn" type="button" class="secondary">Suggest from recent RP · 1 request</button>
+      </div>
+      <div id="universeStatus" class="universe-info" role="status" aria-live="polite"></div>
+      <h3>Canon Inbox &amp; Timeline</h3>
+      <div id="universeFactCount" class="hint"></div>
+      <div id="universeFactList" class="universe-facts"></div>
     </div>
   </dialog>
 
@@ -180,6 +220,7 @@
         <button type="button" id="newStoryBtn" class="primary">＋ New story</button>
         <button type="button" id="duplicateStoryBtn" class="secondary">Duplicate current</button>
         <button type="button" id="importBlueprintBtn" class="secondary">⬇ Import story blueprint</button>
+      <button type="button" id="universeOpenBtn" class="secondary">🌐 Shared universes</button>
         <input type="file" id="importBlueprintFile" accept=".json,application/json" hidden />
       </div>
       <h3>Character profiles</h3>
@@ -237,6 +278,7 @@
 
   <template id="messageTemplate"><article class="msg"><div class="msg-meta"></div><div class="msg-body"></div></article></template>
   <script src="app.js?v=1.2.15"></script>
+  <script src="universe.js?v=1.3.0"></script>
   <script src="director.js?v=1.2.17"></script>
   <script src="time-limit.js?v=1.2.16"></script>
 </body>
